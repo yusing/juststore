@@ -1,5 +1,6 @@
 export { useForm } from './form'
 export type { FormState, FormStore } from './form'
 export { useMemoryStore, type MemoryStore } from './memory'
+export { createMixedState, type MixedState } from './mixed_state'
 export { createStore, type Store } from './store'
 export type { State, StoreSetStateAction } from './types'
