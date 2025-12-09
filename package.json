@@ -1,0 +1,70 @@
+{
+  "name": "juststore",
+  "version": "0.0.2",
+  "description": "A small, expressive, and type-safe state management library for React.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "author": "Yusing",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yusing/juststore"
+  },
+  "homepage": "https://github.com/yusing/juststore",
+  "bugs": {
+    "url": "https://github.com/yusing/juststore/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "state",
+    "react",
+    "typescript",
+    "hooks",
+    "store",
+    "state management",
+    "react hooks"
+  ],
+  "scripts": {
+    "build": "bun run tsc",
+    "typecheck": "bun run tsc --noEmit",
+    "lint": "bun run eslint src/**/*.ts",
+    "format": "bun run prettier --write src/**/*.ts",
+    "format:check": "bun run prettier --check src/**/*.ts",
+    "prepublishOnly": "bun run build",
+    "publish": "npm publish --access public",
+    "prepare": "husky"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "dependencies": {
+    "change-case": "^5.4.4",
+    "react-fast-compare": "^3.2.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "husky": "^9.1.7",
+    "prettier": "^3.7.4",
+    "react": "^19.2.1",
+    "typescript": "^5.9.3"
+  }
+}
