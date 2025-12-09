@@ -46,6 +46,121 @@ const store = createStore<AppState>('app', {
 })
 ```
 
+## Real-World Examples (GoDoxy Web UI)
+
+### Homepage navigation and search
+
+```tsx
+import { store } from '@/components/home/store'
+
+function HomepageFilters() {
+  const categories = store.homepageCategories.use()
+  const [activeCategory, setActiveCategory] = store.navigation.activeCategory.useState()
+  const query = store.searchQuery.useDebounce(150)
+
+  const visibleItems =
+    categories
+      .find(cat => cat.name === activeCategory)
+      ?.items.filter(item => item.name.toLowerCase().includes((query ?? '').toLowerCase())) ?? []
+
+  return (
+    <div>
+      <input
+        value={query ?? ''}
+        onChange={e => store.searchQuery.set(e.target.value)}
+        placeholder="Search services"
+      />
+      <div>
+        {categories.map(name => (
+          <button
+            key={name}
+            data-active={name === activeCategory}
+            onClick={() => setActiveCategory(name)}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      <ul>
+        {visibleItems.map(item => (
+          <li key={item.name}>{item.name}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+### Live route uptime sidebar
+
+```tsx
+import { useWebSocketApi } from '@/hooks/websocket'
+import type { RouteKey } from '@/components/routes/store'
+import { store } from '@/components/routes/store'
+import type { RouteUptimeAggregate, UptimeAggregate } from '@/lib/api'
+
+function RoutesUptimeProvider() {
+  useWebSocketApi<UptimeAggregate>({
+    endpoint: '/metrics/uptime',
+    query: { period: '1d' },
+    onMessage: uptime => {
+      const keys = uptime.data.map(route => route.alias as RouteKey)
+      store.set('routeKeys', keys.toSorted())
+      store.set(
+        'uptime',
+        keys.reduce(
+          (acc, key, index) => {
+            acc[key] = uptime.data[index] as RouteUptimeAggregate
+            return acc
+          },
+          {} as Record<RouteKey, RouteUptimeAggregate>
+        )
+      )
+    }
+  })
+
+  return null
+}
+```
+
+### Server metrics via WebSockets
+
+```tsx
+import { useWebSocketApi } from '@/hooks/websocket'
+import { store } from '@/components/servers/store'
+import type { MetricsPeriod, SystemInfoAggregate, SystemInfoAggregateMode } from '@/lib/api'
+
+const MODES: SystemInfoAggregateMode[] = [
+  'cpu_average',
+  'memory_usage',
+  'disks_read_speed',
+  'disks_write_speed',
+  'disks_iops',
+  'disk_usage',
+  'network_speed',
+  'network_transfer',
+  'sensor_temperature'
+]
+
+function SystemInfoGraphsProvider({ agent, period }: { agent: string; period: MetricsPeriod }) {
+  MODES.forEach(mode => {
+    useWebSocketApi<SystemInfoAggregate>({
+      endpoint: '/metrics/system_info',
+      query: {
+        period,
+        aggregate: mode,
+        agent_name: agent === 'Main Server' ? '' : agent
+      },
+      onMessage: data => {
+        store.systemInfoGraphs[agent]?.[period]?.[mode]?.set(data)
+      }
+    })
+  })
+
+  return null
+}
+```
+
 ## Usage
 
 ### Reading State
