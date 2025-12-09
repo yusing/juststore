@@ -1,6 +1,7 @@
 export { useForm } from './form'
-export type { FormState, FormStore } from './form'
+export type { CreateFormOptions, FormState, FormStore } from './form'
 export { useMemoryStore, type MemoryStore } from './memory'
 export { createMixedState, type MixedState } from './mixed_state'
+export type * from './path'
 export { createStore, type Store } from './store'
 export type { State, StoreSetStateAction } from './types'
