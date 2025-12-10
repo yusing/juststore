@@ -1,6 +1,6 @@
 {
   "name": "juststore",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A small, expressive, and type-safe state management library for React.",
   "type": "module",
   "main": "dist/index.js",
