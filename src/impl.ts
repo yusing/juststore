@@ -17,6 +17,21 @@ export {
 
 const memoryStore = new Map<string, unknown>()
 
+// check if the value is a class instance
+function isClass(value: unknown): boolean {
+  if (value === null || value === undefined) return false
+  if (typeof value !== 'object') return false
+
+  const proto = Object.getPrototypeOf(value)
+  if (!proto || proto === Object.prototype || proto === Array.prototype) return false
+
+  const descriptors = Object.getOwnPropertyDescriptors(proto)
+  for (const key in descriptors) {
+    if (descriptors[key].get) return true
+  }
+  return false
+}
+
 type KeyValueStore = {
   has: (key: string) => boolean
   get: (key: string) => unknown
@@ -409,7 +424,8 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
     skipUpdate = current === undefined
     store.delete(key, memoryOnly)
   } else {
-    if (isEqual(current, value)) return
+    const useRefEquality = isClass(current) || isClass(value)
+    if (useRefEquality ? current === value : isEqual(current, value)) return
     store.set(key, value, memoryOnly)
   }
 
