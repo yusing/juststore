@@ -8,7 +8,7 @@
   "author": "Yusing",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yusing/juststore"
+    "url": "git+https://github.com/yusing/juststore.git"
   },
   "homepage": "https://github.com/yusing/juststore",
   "bugs": {
