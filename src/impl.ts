@@ -104,7 +104,7 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
   if (!path) return value
 
   const segments = path.split('.')
-  const result = tryStructuredClone(obj)
+  const result = segments.length === 1 ? obj : tryStructuredClone(obj)
   let current = result ?? {}
 
   for (let i = 0; i < segments.length - 1; i++) {
