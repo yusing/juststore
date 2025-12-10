@@ -24,7 +24,7 @@
   "files": [
     "dist"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "keywords": [
     "state",
     "react",
