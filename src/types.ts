@@ -122,6 +122,10 @@ type State<T> = {
   subscribe(listener: (value: T) => void): void
   /** Compute a derived value from the current value, similar to useState + useMemo */
   useCompute: <R>(fn: (value: T) => R) => R
+  /** Ensure the value is an array. */
+  ensureArray<U>(): ArrayState<U>
+  /** Ensure the value is an object. */
+  ensureObject<U extends FieldValues>(): ObjectState<U>
   /** Virtual state derived from the current value.
    *
    * @returns ArrayState if the derived value is an array, ObjectState if the derived value is an object, otherwise State.

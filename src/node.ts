@@ -108,10 +108,16 @@ function createNode<T extends FieldValues>(
         }
         if (prop === 'derived') {
           if (isDerived) {
-            throw new Error('Derived method cannot be called on a derived node')
+            throw new Error(`Derived method cannot be called on a derived node: ${path}`)
           }
           return ({ from, to }: DerivedStateProps<any, any>) =>
             createNode(storeApi, path, cache, extensions, from, to)
+        }
+        if (prop === 'ensureArray') {
+          return () => createNode(storeApi, path, cache, extensions, ensureArray, unchanged)
+        }
+        if (prop === 'ensureObject') {
+          return () => createNode(storeApi, path, cache, extensions, ensureObject, unchanged)
         }
 
         const currentValue = from(storeApi.value(path))
@@ -269,4 +275,16 @@ function createNode<T extends FieldValues>(
 
 function unchanged(value: any) {
   return value
+}
+
+function ensureArray(value: any) {
+  if (value === undefined || value === null) return []
+  if (Array.isArray(value)) return value
+  return []
+}
+
+function ensureObject(value: any) {
+  if (value === undefined || value === null) return {}
+  if (typeof value === 'object') return value
+  return {}
 }

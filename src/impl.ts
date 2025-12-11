@@ -29,7 +29,7 @@ function isClass(value: unknown): boolean {
 
   const descriptors = Object.getOwnPropertyDescriptors(proto)
   for (const key in descriptors) {
-    if (descriptors[key].get) return true
+    if (descriptors[key]?.get) return true
   }
   return false
 }
