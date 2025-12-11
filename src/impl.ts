@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import isEqual from 'react-fast-compare'
+import rfcIsEqual from 'react-fast-compare'
 import { localStorageDelete, localStorageGet, localStorageSet } from './local_storage'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
 
 export {
   getNestedValue,
   getSnapshot,
+  isClass,
+  isEqual,
   joinPath,
   notifyListeners,
   produce,
@@ -30,6 +32,19 @@ function isClass(value: unknown): boolean {
     if (descriptors[key].get) return true
   }
   return false
+}
+
+/** Compare two values for equality
+ * @description
+ * - react-fast-compare for non-class instances
+ * - reference equality for class instances
+ * @param a - The first value to compare
+ * @param b - The second value to compare
+ * @returns True if the values are equal, false otherwise
+ */
+function isEqual(a: unknown, b: unknown): boolean {
+  if (isClass(a) || isClass(b)) return a === b
+  return rfcIsEqual(a, b)
 }
 
 type KeyValueStore = {
@@ -424,8 +439,7 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
     skipUpdate = current === undefined
     store.delete(key, memoryOnly)
   } else {
-    const useRefEquality = isClass(current) || isClass(value)
-    if (useRefEquality ? current === value : isEqual(current, value)) return
+    if (isEqual(current, value)) return
     store.set(key, value, memoryOnly)
   }
 
