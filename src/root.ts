@@ -75,9 +75,10 @@ function createStoreRoot<T extends FieldValues>(
       // eslint-disable-next-line react-hooks/rules-of-hooks
       useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),
     useCompute: <P extends FieldPath<T>, R>(path: P, fn: (value: FieldPathValue<T, P>) => R) => {
-      const initialValue = getSnapshot(joinPath(namespace, path)) as FieldPathValue<T, P>
+      const fullPath = joinPath(namespace, path)
+      const initialValue = getSnapshot(fullPath) as FieldPathValue<T, P>
       const [computedValue, setComputedValue] = useState(() => fn(initialValue))
-      useSubscribe(path, value => {
+      useSubscribe(fullPath, value => {
         const newValue = fn(value as FieldPathValue<T, P>)
         if (!isEqual(computedValue, newValue)) {
           setComputedValue(newValue)
