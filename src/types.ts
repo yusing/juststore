@@ -148,7 +148,7 @@ type State<T> = {
    * </store.a.b.c.Show>
    */
   Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
-} & (NonNullable<T> extends readonly (infer U)[] ? ArrayProxy<U> : unknown)
+}
 
 /** Props for Store.Render helper. */
 type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
