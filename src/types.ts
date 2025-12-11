@@ -5,6 +5,7 @@ export type {
   ArrayState,
   DeepProxy,
   DerivedStateProps,
+  ObjectState,
   Prettify,
   State,
   StoreRenderProps,
@@ -121,14 +122,29 @@ type State<T> = {
   subscribe(listener: (value: T) => void): void
   /** Compute a derived value from the current value, similar to useState + useMemo */
   useCompute: <R>(fn: (value: T) => R) => R
-  /** Virtual state derived from the current value. */
+  /** Virtual state derived from the current value.
+   *
+   * @returns ArrayState if the derived value is an array, ObjectState if the derived value is an object, otherwise State.
+   * @example
+   * const state = store.a.b.c.derived({
+   *   from: value => value + 1,
+   *   to: value => value - 1
+   * })
+   * state.use() // returns the derived value
+   * state.set(10) // sets the derived value
+   * state.reset() // resets the derived value
+   */
   derived: <R>({
     from,
     to
   }: {
     from?: (value: T | undefined) => R
     to?: (value: R) => T | undefined
-  }) => State<R>
+  }) => NonNullable<R> extends readonly (infer U)[]
+    ? ArrayState<U>
+    : R extends FieldValues
+      ? ObjectState<R>
+      : State<R>
   /** Notify listener of current value. */
   notify(): void
   /** Render-prop helper for inline usage.
@@ -152,6 +168,9 @@ type State<T> = {
 }
 
 type ArrayState<T> = (State<T[]> | State<T[] | undefined>) & ArrayProxy<T>
+type ObjectState<T extends FieldValues | undefined> = State<T> & {
+  [K in keyof T]: State<T[K]>
+}
 
 /** Props for Store.Render helper. */
 type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
