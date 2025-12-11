@@ -125,8 +125,8 @@ type State<T> = {
     from,
     to
   }: {
-    from: (value: T | undefined) => R
-    to: (value: R) => T | undefined
+    from?: (value: T | undefined) => R
+    to?: (value: R) => T | undefined
   }) => State<R>
   /** Notify listener of current value. */
   notify(): void
@@ -167,6 +167,6 @@ type StoreShowProps<T extends FieldValues, P extends FieldPath<T>> = {
 }
 
 type DerivedStateProps<T, R> = {
-  from: (value: T | undefined) => R
-  to: (value: R) => T | undefined
+  from?: (value: T | undefined) => R
+  to?: (value: R) => T | undefined
 }
