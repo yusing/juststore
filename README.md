@@ -291,7 +291,7 @@ function TemperatureInput() {
 
 ```tsx
 function TotalPrice() {
-  const total = store.cart.items.compute(
+  const total = store.cart.items.useCompute(
     items => items?.reduce((sum, item) => sum + item.price * item.qty, 0) ?? 0
   )
   return <span>Total: ${total}</span>
@@ -450,23 +450,42 @@ Creates a component-scoped store that doesn't persist.
 
 Creates a form store with validation support.
 
+### Root Node Methods
+
+The store root provides path-based methods for dynamic access:
+
+| Method                          | Description                                             |
+| ------------------------------- | ------------------------------------------------------- |
+| `.use(path)`                    | Subscribe and read value (triggers re-render on change) |
+| `.useDebounce(path, ms)`        | Subscribe with debounced updates                        |
+| `.useState(path)`               | Returns `[value, setValue]` tuple                       |
+| `.value(path)`                  | Read without subscribing                                |
+| `.set(path, value)`             | Update value                                            |
+| `.set(path, fn)`                | Functional update                                       |
+| `.reset(path)`                  | Delete value at path                                    |
+| `.subscribe(path, fn)`          | Subscribe to changes (for effects)                      |
+| `.notify(path)`                 | Manually trigger subscribers                            |
+| `.useCompute(path, fn)`         | Derive a computed value                                 |
+| `.Render({ path, children })`   | Render prop component                                   |
+| `.Show({ path, children, on })` | Conditional render component                            |
+
 ### State Methods
 
-| Method                   | Description                                             |
-| ------------------------ | ------------------------------------------------------- |
-| `.use()`                 | Subscribe and read value (triggers re-render on change) |
-| `.useDebounce(ms)`       | Subscribe with debounced updates                        |
-| `.useState()`            | Returns `[value, setValue]` tuple                       |
-| `.value`                 | Read without subscribing                                |
-| `.set(value)`            | Update value                                            |
-| `.set(fn)`               | Functional update                                       |
-| `.reset()`               | Delete value at path                                    |
-| `.subscribe(fn)`         | Subscribe to changes (for effects)                      |
-| `.notify()`              | Manually trigger subscribers                            |
-| `.compute(fn)`           | Derive a computed value                                 |
-| `.derived({ from, to })` | Create bidirectional transform                          |
-| `.Render`                | Render prop component                                   |
-| `.Show`                  | Conditional render component                            |
+| Method                    | Description                                             |
+| ------------------------- | ------------------------------------------------------- |
+| `.use()`                  | Subscribe and read value (triggers re-render on change) |
+| `.useDebounce(ms)`        | Subscribe with debounced updates                        |
+| `.useState()`             | Returns `[value, setValue]` tuple                       |
+| `.value`                  | Read without subscribing                                |
+| `.set(value)`             | Update value                                            |
+| `.set(fn)`                | Functional update                                       |
+| `.reset()`                | Delete value at path                                    |
+| `.subscribe(fn)`          | Subscribe to changes (for effects)                      |
+| `.notify()`               | Manually trigger subscribers                            |
+| `.useCompute(fn)`         | Derive a computed value                                 |
+| `.derived({ from, to })`  | Create bidirectional transform                          |
+| `.Render({ children })`   | Render prop component                                   |
+| `.Show({ children, on })` | Conditional render component                            |
 
 ## License
 

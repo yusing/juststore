@@ -1,6 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from 'react'
-import { isEqual } from './impl'
 import type { FieldValues } from './path'
 import type { DerivedStateProps, State, StoreRoot } from './types'
 
@@ -103,17 +101,9 @@ function createNode<T extends FieldValues>(
           return ({ children, on }: { children: React.ReactNode; on: (value: any) => boolean }) =>
             storeApi.Show({ path, children, on: value => on(from(value)) })
         }
-        if (prop === 'compute') {
+        if (prop === 'useCompute') {
           return <R>(fn: (value: any) => R) => {
-            const initialValue = from(storeApi.value(path))
-            const [computedValue, setComputedValue] = useState(() => fn(initialValue))
-            storeApi.subscribe(path, value => {
-              const newValue = fn(from(value))
-              if (!isEqual(computedValue, newValue)) {
-                setComputedValue(newValue)
-              }
-            })
-            return computedValue
+            return storeApi.useCompute(path, value => fn(from(value)))
           }
         }
         if (prop === 'derived') {

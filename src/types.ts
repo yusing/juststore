@@ -84,6 +84,11 @@ type StoreRoot<T extends FieldValues> = {
     path: P,
     listener: (value: FieldPathValue<T, P>) => void
   ) => void
+  /** Compute a derived value from the current value, similar to useState + useMemo */
+  useCompute: <P extends FieldPath<T>>(
+    path: P,
+    fn: (value: FieldPathValue<T, P>) => FieldPathValue<T, P>
+  ) => FieldPathValue<T, P>
   /** Notify listeners at path. */
   notify: <P extends FieldPath<T>>(path: P) => void
   /** Convenience hook returning [value, setValue] for the path. */
@@ -117,7 +122,7 @@ type State<T> = {
   /** Subscribe to changes at path and invoke listener with the new value. */
   subscribe(listener: (value: T) => void): void
   /** Compute a derived value from the current value, similar to useState + useMemo */
-  compute: <R>(fn: (value: T) => R) => R
+  useCompute: <R>(fn: (value: T) => R) => R
   /** Virtual state derived from the current value. */
   derived: <R>({
     from,

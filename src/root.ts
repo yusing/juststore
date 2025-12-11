@@ -1,7 +1,8 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   getNestedValue,
   getSnapshot,
+  isEqual,
   joinPath,
   notifyListeners,
   produce,
@@ -73,6 +74,20 @@ function createStoreRoot<T extends FieldValues>(
     subscribe: <P extends FieldPath<T>>(path: P, listener: (value: FieldPathValue<T, P>) => void) =>
       // eslint-disable-next-line react-hooks/rules-of-hooks
       useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),
+    useCompute: <P extends FieldPath<T>>(
+      path: P,
+      fn: (value: FieldPathValue<T, P>) => FieldPathValue<T, P>
+    ) => {
+      const initialValue = getSnapshot(joinPath(namespace, path)) as FieldPathValue<T, P>
+      const [computedValue, setComputedValue] = useState(() => fn(initialValue))
+      useSubscribe(path, value => {
+        const newValue = fn(value as FieldPathValue<T, P>)
+        if (!isEqual(computedValue, newValue)) {
+          setComputedValue(newValue)
+        }
+      })
+      return computedValue
+    },
     notify: <P extends FieldPath<T>>(path: P) => {
       const value = getNestedValue(getSnapshot(namespace), path)
       return notifyListeners(joinPath(namespace, path), value, value, true, true)
