@@ -2,6 +2,7 @@ import type { FieldPath, FieldPathValue, FieldValues } from './path'
 
 export type {
   ArrayProxy,
+  ArrayState,
   DeepProxy,
   DerivedStateProps,
   Prettify,
@@ -149,6 +150,8 @@ type State<T> = {
    */
   Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
 }
+
+type ArrayState<T> = (State<T[]> | State<T[] | undefined>) & ArrayProxy<T>
 
 /** Props for Store.Render helper. */
 type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
