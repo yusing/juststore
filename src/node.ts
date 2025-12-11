@@ -120,8 +120,13 @@ function createNode<T extends FieldValues>(
           return () => createNode(storeApi, path, cache, extensions, ensureObject, unchanged)
         }
 
-        const currentValue = from(storeApi.value(path))
-        if (currentValue === undefined || Array.isArray(currentValue)) {
+        if (isArrayMethod(prop)) {
+          const currentValue = from(storeApi.value(path))
+
+          if (currentValue !== undefined && !Array.isArray(currentValue)) {
+            throw new Error(`Expected array at path ${path}, got ${typeof currentValue}`)
+          }
+
           const currentArray = currentValue
             ? isDerived
               ? currentValue.map(from)
@@ -271,6 +276,23 @@ function createNode<T extends FieldValues>(
     cache.set(path, proxy)
   }
   return proxy as State<T>
+}
+
+function isArrayMethod(prop: string | symbol) {
+  return (
+    prop === 'at' ||
+    prop === 'length' ||
+    prop === 'push' ||
+    prop === 'pop' ||
+    prop === 'shift' ||
+    prop === 'unshift' ||
+    prop === 'splice' ||
+    prop === 'reverse' ||
+    prop === 'sort' ||
+    prop === 'fill' ||
+    prop === 'copyWithin' ||
+    prop === 'sortedInsert'
+  )
 }
 
 function unchanged(value: any) {
