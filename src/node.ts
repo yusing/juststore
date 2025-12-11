@@ -113,7 +113,14 @@ function createNode<T extends FieldValues>(
           return ({ from, to }: DerivedStateProps<any, any>) =>
             createNode(storeApi, path, cache, extensions, from, to)
         }
-        if (Array.isArray(storeApi.value(path))) {
+
+        const currentValue = from(storeApi.value(path))
+        if (currentValue === undefined || Array.isArray(currentValue)) {
+          const currentArray = currentValue
+            ? isDerived
+              ? currentValue.map(from)
+              : [...currentValue]
+            : []
           if (prop === 'at') {
             return (index: number) => {
               const nextPath = path ? `${path}.${index}` : String(index)
@@ -121,14 +128,12 @@ function createNode<T extends FieldValues>(
             }
           }
           if (prop === 'length') {
-            const value = from(storeApi.value(path))
-            return Array.isArray(value) ? value.length : undefined
+            return currentArray.length
           }
 
           // Array mutation methods
           if (prop === 'push') {
             return (...items: any[]) => {
-              const currentArray = from(storeApi.value(path)) ?? []
               const transformedItems = isDerived ? items.map(to) : items
               const newArray = [...currentArray, ...transformedItems]
               storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
@@ -137,7 +142,6 @@ function createNode<T extends FieldValues>(
           }
           if (prop === 'pop') {
             return () => {
-              const currentArray = from(storeApi.value(path)) ?? []
               if (currentArray.length === 0) return undefined
               const newArray = currentArray.slice(0, -1)
               const poppedItem = currentArray[currentArray.length - 1]
@@ -147,7 +151,6 @@ function createNode<T extends FieldValues>(
           }
           if (prop === 'shift') {
             return () => {
-              const currentArray = from(storeApi.value(path)) ?? []
               if (currentArray.length === 0) return undefined
               const newArray = currentArray.slice(1)
               const shiftedItem = currentArray[0]
@@ -157,7 +160,6 @@ function createNode<T extends FieldValues>(
           }
           if (prop === 'unshift') {
             return (...items: any[]) => {
-              const currentArray = from(storeApi.value(path)) ?? []
               const transformedItems = isDerived ? items.map(to) : items
               const newArray = [...transformedItems, ...currentArray]
               storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
@@ -166,51 +168,43 @@ function createNode<T extends FieldValues>(
           }
           if (prop === 'splice') {
             return (start: number, deleteCount?: number, ...items: any[]) => {
-              const currentArray = from(storeApi.value(path)) ?? []
-              const newArray = [...currentArray]
               const transformedItems = isDerived ? items.map(to) : items
-              const deletedItems = newArray.splice(start, deleteCount ?? 0, ...transformedItems)
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
+              const deletedItems = currentArray.splice(start, deleteCount ?? 0, ...transformedItems)
+              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
               return deletedItems
             }
           }
           if (prop === 'reverse') {
             return () => {
-              const currentArray = from(storeApi.value(path)) ?? []
               if (!Array.isArray(currentArray)) return []
-              const newArray = [...currentArray].reverse()
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
-              return newArray
+              currentArray.reverse()
+              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              return currentArray
             }
           }
           if (prop === 'sort') {
             return (compareFn?: (a: any, b: any) => number) => {
-              const currentArray = from(storeApi.value(path)) ?? []
-              const newArray = [...currentArray].sort(compareFn)
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
-              return newArray
+              currentArray.sort(compareFn)
+              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              return currentArray
             }
           }
           if (prop === 'fill') {
             return (value: any[], start?: number, end?: number) => {
-              const currentArray = from(storeApi.value(path)) ?? []
-              const newArray = [...currentArray].fill(value, start, end)
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
-              return newArray
+              currentArray.fill(value, start, end)
+              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              return currentArray
             }
           }
           if (prop === 'copyWithin') {
             return (target: number, start: number, end?: number) => {
-              const currentArray = from(storeApi.value(path)) ?? []
-              const newArray = [...currentArray].copyWithin(target, start, end)
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
-              return newArray
+              currentArray.copyWithin(target, start, end)
+              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              return currentArray
             }
           }
           if (prop === 'sortedInsert') {
             return (cmp: (a: any, b: any) => number, ...items: any[]) => {
-              const currentArray = from(storeApi.value(path)) ?? []
-
               if (typeof cmp !== 'function')
                 return isDerived ? currentArray.map(from).length : currentArray.length
 
