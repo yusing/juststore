@@ -92,34 +92,6 @@ function getNestedValue(obj: unknown, path: string): unknown {
 }
 
 /**
- * Creates a deep clone of an object, optimized for common cases.
- *
- * Uses fast paths for primitives and arrays of primitives, falling back
- * to structuredClone for complex objects. Returns null if cloning fails.
- *
- * @param obj - The value to clone
- * @returns A deep copy of the value, or null if cloning fails
- */
-function tryStructuredClone(obj: unknown): unknown {
-  if (obj === null || obj === undefined) return null
-  if (typeof obj !== 'object') return obj
-
-  if (Array.isArray(obj)) {
-    const needsDeepClone = obj.some(item => item !== null && typeof item === 'object')
-    if (!needsDeepClone) {
-      return [...obj]
-    }
-    return obj.map(item => tryStructuredClone(item))
-  }
-
-  try {
-    return structuredClone(obj)
-  } catch {
-    return null
-  }
-}
-
-/**
  * Immutably sets or deletes a nested value using a dot-separated path.
  *
  * Creates intermediate objects or arrays as needed based on whether the next
@@ -135,8 +107,18 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
   if (!path) return value
 
   const segments = path.split('.')
-  const result = segments.length === 1 ? obj : tryStructuredClone(obj)
-  let current = result ?? {}
+  if (obj !== null && obj !== undefined && typeof obj !== 'object') {
+    return obj
+  }
+
+  const result: Record<string, unknown> | unknown[] =
+    obj === null || obj === undefined
+      ? {}
+      : Array.isArray(obj)
+        ? [...obj]
+        : { ...(obj as Record<string, unknown>) }
+
+  let current: Record<string, unknown> | unknown[] = result
 
   for (let i = 0; i < segments.length - 1; i++) {
     const segment = segments[i]!
@@ -147,16 +129,34 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
       const index = Number(segment)
       if (Number.isNaN(index)) break
 
-      if (!current[index]) {
-        current[index] = isNextIndex ? [] : {}
+      const existing = current[index]
+      let next: Record<string, unknown> | unknown[]
+      if (existing === null || existing === undefined) {
+        next = isNextIndex ? [] : {}
+      } else if (typeof existing !== 'object') {
+        next = isNextIndex ? [] : {}
+      } else if (Array.isArray(existing)) {
+        next = [...existing]
+      } else {
+        next = { ...(existing as Record<string, unknown>) }
       }
-      current = current[index] as Record<string, unknown> | unknown[]
+      current[index] = next
+      current = next
     } else if (typeof current === 'object' && current !== null) {
       const currentObj = current as Record<string, unknown>
-      if (!currentObj[segment]) {
-        currentObj[segment] = isNextIndex ? [] : {}
+      const existing = currentObj[segment]
+      let next: Record<string, unknown> | unknown[]
+      if (existing === null || existing === undefined) {
+        next = isNextIndex ? [] : {}
+      } else if (typeof existing !== 'object') {
+        next = isNextIndex ? [] : {}
+      } else if (Array.isArray(existing)) {
+        next = [...existing]
+      } else {
+        next = { ...(existing as Record<string, unknown>) }
       }
-      current = currentObj[segment] as Record<string, unknown> | unknown[]
+      currentObj[segment] = next
+      current = next
     }
   }
 
