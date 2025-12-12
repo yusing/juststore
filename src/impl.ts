@@ -276,8 +276,7 @@ function forceNotifyListeners(
 }
 
 // BroadcastChannel for cross-tab synchronization
-const broadcastChannel =
-  typeof window !== 'undefined' ? new BroadcastChannel('godoxy-producer-consumer') : null
+const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('juststore') : null
 
 /**
  * Backing store providing in-memory data with localStorage persistence
