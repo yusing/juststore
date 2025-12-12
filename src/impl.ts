@@ -20,6 +20,8 @@ export {
 }
 
 const memoryStore = new Map<string, unknown>()
+const listeners = new Map<string, Set<() => void>>()
+const descendantListenerKeysByPrefix = new Map<string, Set<string>>()
 
 // check if the value is a class instance
 function isClass(value: unknown): boolean {
@@ -211,6 +213,23 @@ function splitNSPath(key: string): [string, string] {
   return [key.slice(0, index), key.slice(index + 1)]
 }
 
+function getKeyPrefixes(key: string): string[] {
+  const dot = key.indexOf('.')
+  if (dot === -1) return []
+
+  const parts = key.split('.')
+  if (parts.length <= 1) return []
+
+  const prefixes: string[] = []
+  let current = parts[0]!
+  for (let i = 1; i < parts.length - 1; i++) {
+    current += '.' + parts[i]!
+    prefixes.push(current)
+  }
+  prefixes.unshift(parts[0]!)
+  return prefixes
+}
+
 /**
  * Notifies all relevant listeners when a value changes.
  *
@@ -240,33 +259,49 @@ function notifyListeners(
     return
   }
 
-  const rootKey = skipRoot ? null : key.split('.').slice(0, 2).join('.')
-  const keyPrefix = skipChildren ? null : key + '.'
+  // Exact key match
+  const exactSet = listeners.get(key)
+  if (exactSet) {
+    exactSet.forEach(listener => listener())
+  }
 
-  // Single pass: collect listeners to notify
-  const listenersToNotify = new Set<() => void>()
+  // Ancestor keys match (including namespace root)
+  if (!skipRoot) {
+    const namespace = getNamespace(key)
+    const rootSet = listeners.get(namespace)
+    if (rootSet) {
+      rootSet.forEach(listener => listener())
+    }
 
-  for (const [listenerKey, listenerSet] of listeners.entries()) {
-    if (listenerKey === key) {
-      // Exact key match
-      listenerSet.forEach(listener => listenersToNotify.add(listener))
-    } else if (rootKey && listenerKey === rootKey) {
-      // Root key match
-      listenerSet.forEach(listener => listenersToNotify.add(listener))
-    } else if (keyPrefix && listenerKey.startsWith(keyPrefix)) {
-      // Child key match - check if value actually changed
-      const childPath = listenerKey.substring(key.length + 1)
-      const oldChildValue = getNestedValue(oldValue, childPath)
-      const newChildValue = getNestedValue(newValue, childPath)
-
-      if (forceNotify || !isEqual(oldChildValue, newChildValue)) {
-        listenerSet.forEach(listener => listenersToNotify.add(listener))
+    // Also notify intermediate ancestors
+    const prefixes = getKeyPrefixes(key)
+    for (const prefix of prefixes) {
+      if (prefix === namespace) continue // Already handled
+      const prefixSet = listeners.get(prefix)
+      if (prefixSet) {
+        prefixSet.forEach(listener => listener())
       }
     }
   }
 
-  // Notify all collected listeners
-  listenersToNotify.forEach(listener => listener())
+  // Child key match - check if value actually changed
+  if (!skipChildren) {
+    const childKeys = descendantListenerKeysByPrefix.get(key)
+    if (childKeys) {
+      for (const childKey of childKeys) {
+        const childPath = childKey.slice(key.length + 1)
+        const oldChildValue = getNestedValue(oldValue, childPath)
+        const newChildValue = getNestedValue(newValue, childPath)
+
+        if (forceNotify || !isEqual(oldChildValue, newChildValue)) {
+          const childSet = listeners.get(childKey)
+          if (childSet) {
+            childSet.forEach(listener => listener())
+          }
+        }
+      }
+    }
+  }
 }
 
 function forceNotifyListeners(
@@ -398,27 +433,9 @@ if (broadcastChannel) {
 
     // Notify all listeners that might be affected by this root key change
     const newRootValue = type === 'delete' ? undefined : value
-
-    for (const listenerKey of listeners.keys()) {
-      if (listenerKey === key) {
-        // Direct key match - notify with old and new values
-        notifyListeners(listenerKey, oldRootValue, newRootValue)
-      } else if (listenerKey.startsWith(key + '.')) {
-        // Child key - check if its value actually changed
-        const childPath = listenerKey.substring(key.length + 1)
-        const oldChildValue = getNestedValue(oldRootValue, childPath)
-        const newChildValue = getNestedValue(newRootValue, childPath)
-
-        if (!isEqual(oldChildValue, newChildValue)) {
-          const childListeners = listeners.get(listenerKey)
-          childListeners?.forEach(listener => listener())
-        }
-      }
-    }
+    notifyListeners(key, oldRootValue, newRootValue)
   })
 }
-
-const listeners = new Map<string, Set<() => void>>()
 
 /**
  * Subscribes to changes for a specific key.
@@ -433,6 +450,14 @@ function subscribe(key: string, listener: () => void) {
   }
   listeners.get(key)!.add(listener)
 
+  const prefixes = getKeyPrefixes(key)
+  for (const prefix of prefixes) {
+    if (!descendantListenerKeysByPrefix.has(prefix)) {
+      descendantListenerKeysByPrefix.set(prefix, new Set())
+    }
+    descendantListenerKeysByPrefix.get(prefix)!.add(key)
+  }
+
   return () => {
     const keyListeners = listeners.get(key)
     if (keyListeners) {
@@ -441,6 +466,18 @@ function subscribe(key: string, listener: () => void) {
         listeners.delete(key)
       }
     }
+
+    for (const prefix of prefixes) {
+      const prefixKeys = descendantListenerKeysByPrefix.get(prefix)
+      if (prefixKeys) {
+        prefixKeys.delete(key)
+        if (prefixKeys.size === 0) {
+          descendantListenerKeysByPrefix.delete(prefix)
+        }
+      }
+    }
+  }
+}
 
 /**
  * Disposes a memory store and all its listeners.
@@ -639,7 +676,8 @@ const __pc_debug = {
   getStoreSize: () => store.size,
   getListenerSize: () => listeners.size,
   getStore: () => memoryStore,
-  getStoreValue: (key: string) => memoryStore.get(key)
+  getStoreValue: (key: string) => memoryStore.get(key),
+  getListeners: () => listeners
 }
 
 // Expose debug in browser for quick inspection during development
