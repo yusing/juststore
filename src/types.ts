@@ -28,7 +28,8 @@ type DeepProxy<T> =
           [K in keyof NonNullable<T>]-?: NonNullable<NonNullable<T>[K]> extends object
             ? DeepProxy<NonNullable<T>[K]>
             : State<NonNullable<T>[K]>
-        } & State<T>
+        } & State<T> &
+          ObjectMutationMethods<NonNullable<T>>
       : State<T>
 
 type ArrayMutationMethods<T> = Pick<
@@ -53,6 +54,11 @@ type ArrayProxy<T> = Prettify<ArrayMutationMethods<T>> & {
   at(index: number): T extends object ? DeepProxy<T> : State<T>
   /** Insert items into the array in sorted order using the provided comparison function. */
   sortedInsert(cmp: (a: T, b: T) => number, ...items: T[]): number
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type ObjectMutationMethods<T extends FieldValues | undefined> = {
+  rename: (oldKey: string, newKey: string, notifyObject?: boolean) => void
 }
 
 /** Tuple returned by Store.use(path). */
@@ -81,6 +87,13 @@ type StoreRoot<T extends FieldValues> = {
   value: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
   /** Delete value at path (for arrays, removes index; for objects, deletes key). */
   reset: <P extends FieldPath<T>>(path: P) => void
+  /** Rename a key in an object. */
+  rename: <P extends FieldPath<T>>(
+    path: P,
+    oldKey: string,
+    newKey: string,
+    notifyObject?: boolean
+  ) => void
   /** Subscribe to changes at path and invoke listener with the new value. */
   subscribe: <P extends FieldPath<T>>(
     path: P,
@@ -173,6 +186,9 @@ type State<T> = {
 
 type ArrayState<T> = (State<T[]> | State<T[] | undefined>) & ArrayProxy<T>
 type ObjectState<T extends FieldValues | undefined> = State<T> & {
+  /** Rename a key in an object. */
+  rename: (oldKey: string, newKey: string, notifyObject?: boolean) => void
+} & {
   [K in keyof T]: State<T[K]>
 }
 

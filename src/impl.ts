@@ -11,6 +11,7 @@ export {
   joinPath,
   notifyListeners,
   produce,
+  rename,
   setLeaf,
   useDebounce,
   useObject,
@@ -464,6 +465,44 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
 
   // Notify listeners hierarchically with old and new values
   notifyListeners(key, current, value)
+}
+
+/**
+ * Renames a key in an object.
+ *
+ * It trigger updates to
+ *
+ *  - listeners to `path` (key is updated)
+ *  - listeners to `path.oldKey` (deleted)
+ *  - listeners to `path.newKey` (created)
+ *
+ * @param path - The full key path to rename
+ * @param oldKey - The old key to rename
+ * @param newKey - The new key to rename to
+ * @param notifyObject - Whether to notify listeners to the object path
+ */
+function rename(path: string, oldKey: string, newKey: string, notifyObject = true) {
+  const current = store.get(path)
+  if (current === undefined || current === null || typeof current !== 'object') {
+    // assign a new object with the new key
+    store.set(path, { [newKey]: undefined })
+    if (notifyObject) {
+      forceNotifyListeners(path, { skipChildren: true })
+    }
+    return
+  }
+
+  const oldValue = (current as Record<string, unknown>)[oldKey]
+  const newObject = { ...current, [oldKey]: undefined, [newKey]: oldValue }
+  delete newObject[oldKey]
+  store.set(path, newObject)
+  if (oldValue !== undefined) {
+    forceNotifyListeners(joinPath(path, oldKey))
+  }
+  forceNotifyListeners(joinPath(path, newKey))
+  if (notifyObject) {
+    forceNotifyListeners(path, { skipChildren: true })
+  }
 }
 
 /**

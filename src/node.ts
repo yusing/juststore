@@ -127,6 +127,19 @@ function createNode<T extends FieldValues>(
           return () => createNode(storeApi, path, cache, extensions, ensureObject, unchanged)
         }
 
+        if (isObjectMethod(prop)) {
+          const derivedValue = from(storeApi.value(path))
+          if (derivedValue !== undefined && typeof derivedValue !== 'object') {
+            throw new Error(`Expected object at path ${path}, got ${typeof derivedValue}`)
+          }
+
+          if (prop === 'rename') {
+            return (oldKey: string, newKey: string, notifyObject?: boolean) => {
+              storeApi.rename(path, oldKey, newKey, notifyObject)
+            }
+          }
+        }
+
         if (isArrayMethod(prop)) {
           const derivedValue = from(storeApi.value(path))
 
@@ -289,6 +302,10 @@ function isArrayMethod(prop: string | symbol) {
     prop === 'copyWithin' ||
     prop === 'sortedInsert'
   )
+}
+
+function isObjectMethod(prop: string | symbol) {
+  return prop === 'rename'
 }
 
 function unchanged(value: any) {
