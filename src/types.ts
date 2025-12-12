@@ -75,6 +75,10 @@ type StoreRoot<T extends FieldValues> = {
   use: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
   /** Subscribe and read the debounced value at path. Re-renders when the value changes. */
   useDebounce: <P extends FieldPath<T>>(path: P, delay: number) => FieldPathValue<T, P> | undefined
+  /** Convenience hook returning [value, setValue] for the path. */
+  useState: <P extends FieldPath<T>>(path: P) => StoreUse<FieldPathValue<T, P>>
+  /** Read without subscribing. */
+  value: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
   /** Set value at path (creates intermediate nodes as needed). */
   set: <P extends FieldPath<T>>(
     path: P,
@@ -83,8 +87,6 @@ type StoreRoot<T extends FieldValues> = {
       | ((prev: FieldPathValue<T, P> | undefined) => FieldPathValue<T, P>),
     skipUpdate?: boolean
   ) => void
-  /** Read without subscribing. */
-  value: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
   /** Delete value at path (for arrays, removes index; for objects, deletes key). */
   reset: <P extends FieldPath<T>>(path: P) => void
   /** Rename a key in an object. */
@@ -103,8 +105,7 @@ type StoreRoot<T extends FieldValues> = {
   useCompute: <P extends FieldPath<T>, R>(path: P, fn: (value: FieldPathValue<T, P>) => R) => R
   /** Notify listeners at path. */
   notify: <P extends FieldPath<T>>(path: P) => void
-  /** Convenience hook returning [value, setValue] for the path. */
-  useState: <P extends FieldPath<T>>(path: P) => StoreUse<FieldPathValue<T, P>>
+
   /** Render-prop helper for inline usage. */
   Render: <P extends FieldPath<T>>(
     props: FieldPathValue<T, P> extends undefined ? never : StoreRenderProps<T, P>
