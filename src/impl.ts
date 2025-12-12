@@ -184,22 +184,26 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
 /**
  * Extracts the root namespace from a full key.
  *
- * @param key - Full key string (e.g., "app.user.name")
- * @returns Namespace (e.g., "app")
+ * @param key - Full key string
+ * @returns Namespace
+ * @example
+ * getNamespace('app.user.name') // 'app'
  */
-function getRootKey(key: string): string {
+function getNamespace(key: string): string {
   const index = key.indexOf('.')
   if (index === -1) return key
   return key.slice(0, index)
 }
 
 /**
- * Extracts the nested path from a full key, excluding the namespace.
+ * Extracts the namespace and path from a full key.
  *
- * @param key - Full key string (e.g., "app.user.name")
- * @returns [namespace, path] (e.g. ["app", "user.name"])
+ * @param key - Full key string
+ * @returns [namespace, path]
+ * @example
+ * splitNSPath('app.user.name') // ['app', 'user.name']
  */
-function splitRootPath(key: string): [string, string] {
+function splitNSPath(key: string): [string, string] {
   const index = key.indexOf('.')
   if (index === -1) return [key, '']
   return [key.slice(0, index), key.slice(index + 1)]
@@ -281,14 +285,14 @@ const broadcastChannel =
  */
 const store: KeyValueStore = {
   has(key: string) {
-    const rootKey = getRootKey(key)
+    const rootKey = getNamespace(key)
     return (
       memoryStore.has(rootKey) ||
       (typeof window !== 'undefined' && localStorageGet(rootKey) !== undefined)
     )
   },
   get(key: string) {
-    const [rootKey, path] = splitRootPath(key)
+    const [rootKey, path] = splitNSPath(key)
 
     // Get root object from memory or localStorage
     let rootValue: unknown
@@ -312,7 +316,7 @@ const store: KeyValueStore = {
       return this.delete(key, memoryOnly)
     }
 
-    const [rootKey, path] = splitRootPath(key)
+    const [rootKey, path] = splitNSPath(key)
 
     let rootValue: unknown
 
@@ -339,7 +343,7 @@ const store: KeyValueStore = {
     }
   },
   delete(key: string, memoryOnly = false) {
-    const [rootKey, path] = splitRootPath(key)
+    const [rootKey, path] = splitNSPath(key)
 
     if (!path) {
       // Deleting root key
