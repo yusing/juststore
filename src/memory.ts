@@ -1,4 +1,5 @@
-import { useId } from 'react'
+import { useEffect, useId } from 'react'
+import { disposeMemoryStore } from './impl'
 import { createRootNode } from './node'
 import type { FieldValues } from './path'
 import { createStoreRoot } from './root'
@@ -61,5 +62,12 @@ function useMemoryStore<T extends FieldValues>(defaultValue: T): MemoryStore<T> 
   const storeApi = createStoreRoot(namespace, defaultValue, {
     memoryOnly: true
   })
+
+  // Clean up memory store on unmount
+  useEffect(() => {
+    return () => {
+      disposeMemoryStore(namespace)
+    }
+  }, [namespace])
   return createRootNode(storeApi) as MemoryStore<T>
 }

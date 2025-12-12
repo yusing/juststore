@@ -4,6 +4,7 @@ import { localStorageDelete, localStorageGet, localStorageSet } from './local_st
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
 
 export {
+  disposeMemoryStore,
   getNestedValue,
   getSnapshot,
   isClass,
@@ -439,6 +440,18 @@ function subscribe(key: string, listener: () => void) {
       if (keyListeners.size === 0) {
         listeners.delete(key)
       }
+    }
+
+/**
+ * Disposes a memory store and all its listeners.
+ *
+ * @param namespace - The namespace of the memory store to dispose
+ */
+function disposeMemoryStore(namespace: string) {
+  memoryStore.delete(namespace)
+  for (const key of listeners.keys()) {
+    if (key.startsWith(namespace)) {
+      listeners.delete(key)
     }
   }
 }
