@@ -29,7 +29,7 @@ type DeepProxy<T> =
             ? DeepProxy<NonNullable<T>[K]>
             : State<NonNullable<T>[K]>
         } & State<T> &
-          ObjectMutationMethods<NonNullable<T>>
+          ObjectMutationMethods
       : State<T>
 
 type ArrayMutationMethods<T> = Pick<
@@ -56,8 +56,7 @@ type ArrayProxy<T> = Prettify<ArrayMutationMethods<T>> & {
   sortedInsert(cmp: (a: T, b: T) => number, ...items: T[]): number
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type ObjectMutationMethods<T extends FieldValues | undefined> = {
+type ObjectMutationMethods = {
   rename: (oldKey: string, newKey: string, notifyObject?: boolean) => void
 }
 
