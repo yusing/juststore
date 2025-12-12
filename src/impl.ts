@@ -185,21 +185,24 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
  * Extracts the root namespace from a full key.
  *
  * @param key - Full key string (e.g., "app.user.name")
- * @returns The first segment (e.g., "app")
+ * @returns Namespace (e.g., "app")
  */
 function getRootKey(key: string): string {
-  return key.split('.')[0]!
+  const index = key.indexOf('.')
+  if (index === -1) return key
+  return key.slice(0, index)
 }
 
 /**
  * Extracts the nested path from a full key, excluding the namespace.
  *
  * @param key - Full key string (e.g., "app.user.name")
- * @returns The path after the namespace (e.g., "user.name")
+ * @returns [namespace, path] (e.g. ["app", "user.name"])
  */
-function getPath(key: string): string {
-  const segments = key.split('.')
-  return segments.slice(1).join('.')
+function splitRootPath(key: string): [string, string] {
+  const index = key.indexOf('.')
+  if (index === -1) return [key, '']
+  return [key.slice(0, index), key.slice(index + 1)]
 }
 
 /**
@@ -267,8 +270,7 @@ const store: KeyValueStore = {
     )
   },
   get(key: string) {
-    const rootKey = getRootKey(key)
-    const path = getPath(key)
+    const [rootKey, path] = splitRootPath(key)
 
     // Get root object from memory or localStorage
     let rootValue: unknown
@@ -288,8 +290,11 @@ const store: KeyValueStore = {
     return getNestedValue(rootValue, path)
   },
   set(key: string, value: unknown, memoryOnly = false) {
-    const rootKey = getRootKey(key)
-    const path = getPath(key)
+    if (value === undefined) {
+      return this.delete(key, memoryOnly)
+    }
+
+    const [rootKey, path] = splitRootPath(key)
 
     let rootValue: unknown
 
@@ -303,11 +308,7 @@ const store: KeyValueStore = {
     }
 
     // Update memory
-    if (rootValue === undefined) {
-      memoryStore.delete(rootKey)
-    } else {
-      memoryStore.set(rootKey, rootValue)
-    }
+    memoryStore.set(rootKey, rootValue)
 
     // Persist to localStorage (unless memoryOnly)
     if (!memoryOnly && typeof window !== 'undefined') {
@@ -320,8 +321,7 @@ const store: KeyValueStore = {
     }
   },
   delete(key: string, memoryOnly = false) {
-    const rootKey = getRootKey(key)
-    const path = getPath(key)
+    const [rootKey, path] = splitRootPath(key)
 
     if (!path) {
       // Deleting root key
@@ -435,13 +435,8 @@ function subscribe(key: string, listener: () => void) {
 function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = false) {
   const current = store.get(key)
 
-  if (value === undefined) {
-    skipUpdate = current === undefined
-    store.delete(key, memoryOnly)
-  } else {
-    if (isEqual(current, value)) return
-    store.set(key, value, memoryOnly)
-  }
+  if (isEqual(current, value)) return
+  store.set(key, value, memoryOnly)
 
   if (skipUpdate) return
 
