@@ -1,6 +1,7 @@
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
 
 export type {
+  AllowedKeys,
   ArrayProxy,
   ArrayState,
   DeepProxy,
@@ -19,13 +20,15 @@ type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
 
+type AllowedKeys<T> = Exclude<keyof T, keyof State<unknown> | keyof ObjectMutationMethods>
+
 /** Type for nested objects with proxy methods */
 type DeepProxy<T> =
   NonNullable<T> extends readonly (infer U)[]
     ? ArrayProxy<U> & State<T>
     : NonNullable<T> extends FieldValues
       ? {
-          [K in keyof NonNullable<T>]-?: NonNullable<NonNullable<T>[K]> extends object
+          [K in AllowedKeys<NonNullable<T>>]-?: NonNullable<NonNullable<T>[K]> extends object
             ? DeepProxy<NonNullable<T>[K]>
             : State<NonNullable<T>[K]>
         } & State<T> &

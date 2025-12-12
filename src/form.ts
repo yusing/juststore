@@ -7,7 +7,7 @@ import { getSnapshot, produce } from './impl'
 import { createNode } from './node'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
 import { createStoreRoot } from './root'
-import type { ArrayProxy, State, StoreRoot } from './types'
+import type { AllowedKeys, ArrayProxy, State, StoreRoot } from './types'
 
 export {
   useForm,
@@ -41,7 +41,7 @@ type FormDeepProxy<T> =
     ? FormArrayProxy<U> & FormState<T>
     : NonNullable<T> extends FieldValues
       ? {
-          [K in keyof NonNullable<T>]-?: NonNullable<NonNullable<T>[K]> extends object
+          [K in AllowedKeys<NonNullable<T>>]-?: NonNullable<NonNullable<T>[K]> extends object
             ? FormDeepProxy<NonNullable<T>[K]>
             : FormState<NonNullable<T>[K]>
         } & FormState<T>

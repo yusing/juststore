@@ -273,7 +273,7 @@ function createNode<T extends FieldValues>(
           return extensions[prop]?.set(value)
         }
         if (typeof prop === 'string' || typeof prop === 'number') {
-          const nextPath = path ? `${path}.${prop}` : prop
+          const nextPath = path ? `${path}.${prop}` : String(prop)
           storeApi.set(nextPath, to(value))
           return true
         }
