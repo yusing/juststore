@@ -117,6 +117,9 @@ function createNode<T extends FieldValues>(
           return ({ from, to }: DerivedStateProps<any, any>) =>
             createNode(storeApi, path, cache, extensions, from, to)
         }
+        if (prop === 'notify') {
+          return () => storeApi.notify(path)
+        }
         if (prop === 'ensureArray') {
           return () => createNode(storeApi, path, cache, extensions, ensureArray, unchanged)
         }
