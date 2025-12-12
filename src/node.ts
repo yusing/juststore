@@ -54,6 +54,7 @@ function createNode<T extends FieldValues>(
   to = unchanged
 ): State<T> {
   const isDerived = from !== unchanged || to !== unchanged
+  const fieldName = path.split('.').pop()
   if (!isDerived && cache.has(path)) {
     return cache.get(path)
   }
@@ -62,7 +63,7 @@ function createNode<T extends FieldValues>(
     {
       get(_target, prop) {
         if (prop === 'field') {
-          return path.split('.').pop()
+          return fieldName
         }
         if (prop === 'use') {
           return () => from(storeApi.use(path))
@@ -71,7 +72,10 @@ function createNode<T extends FieldValues>(
           return (delay: number) => from(storeApi.useDebounce(path, delay))
         }
         if (prop === 'useState') {
-          return () => [from(storeApi.use(path)), (value: any) => storeApi.set(path, to(value))]
+          return () => {
+            const value = storeApi.use(path)
+            return [from(value), (next: any) => storeApi.set(path, to(next))]
+          }
         }
         if (prop === 'value') {
           return from(storeApi.value(path))
@@ -121,17 +125,13 @@ function createNode<T extends FieldValues>(
         }
 
         if (isArrayMethod(prop)) {
-          const currentValue = from(storeApi.value(path))
+          const derivedValue = from(storeApi.value(path))
 
-          if (currentValue !== undefined && !Array.isArray(currentValue)) {
-            throw new Error(`Expected array at path ${path}, got ${typeof currentValue}`)
+          if (derivedValue !== undefined && !Array.isArray(derivedValue)) {
+            throw new Error(`Expected array at path ${path}, got ${typeof derivedValue}`)
           }
 
-          const currentArray = currentValue
-            ? isDerived
-              ? currentValue.map(from)
-              : [...currentValue]
-            : []
+          const currentArray = derivedValue ? [...derivedValue] : []
           if (prop === 'at') {
             return (index: number) => {
               const nextPath = path ? `${path}.${index}` : String(index)
@@ -145,9 +145,8 @@ function createNode<T extends FieldValues>(
           // Array mutation methods
           if (prop === 'push') {
             return (...items: any[]) => {
-              const transformedItems = isDerived ? items.map(to) : items
-              const newArray = [...currentArray, ...transformedItems]
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
+              const newArray = [...currentArray, ...items]
+              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
               return newArray.length
             }
           }
@@ -156,7 +155,7 @@ function createNode<T extends FieldValues>(
               if (currentArray.length === 0) return undefined
               const newArray = currentArray.slice(0, -1)
               const poppedItem = currentArray[currentArray.length - 1]
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
+              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
               return poppedItem
             }
           }
@@ -165,23 +164,21 @@ function createNode<T extends FieldValues>(
               if (currentArray.length === 0) return undefined
               const newArray = currentArray.slice(1)
               const shiftedItem = currentArray[0]
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
+              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
               return shiftedItem
             }
           }
           if (prop === 'unshift') {
             return (...items: any[]) => {
-              const transformedItems = isDerived ? items.map(to) : items
-              const newArray = [...transformedItems, ...currentArray]
-              storeApi.set(path as any, isDerived ? newArray.map(from) : newArray)
+              const newArray = [...items, ...currentArray]
+              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
               return newArray.length
             }
           }
           if (prop === 'splice') {
             return (start: number, deleteCount?: number, ...items: any[]) => {
-              const transformedItems = isDerived ? items.map(to) : items
-              const deletedItems = currentArray.splice(start, deleteCount ?? 0, ...transformedItems)
-              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              const deletedItems = currentArray.splice(start, deleteCount ?? 0, ...items)
+              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
               return deletedItems
             }
           }
@@ -189,42 +186,38 @@ function createNode<T extends FieldValues>(
             return () => {
               if (!Array.isArray(currentArray)) return []
               currentArray.reverse()
-              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
               return currentArray
             }
           }
           if (prop === 'sort') {
             return (compareFn?: (a: any, b: any) => number) => {
               currentArray.sort(compareFn)
-              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
               return currentArray
             }
           }
           if (prop === 'fill') {
             return (value: any[], start?: number, end?: number) => {
               currentArray.fill(value, start, end)
-              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
               return currentArray
             }
           }
           if (prop === 'copyWithin') {
             return (target: number, start: number, end?: number) => {
               currentArray.copyWithin(target, start, end)
-              storeApi.set(path as any, isDerived ? currentArray.map(from) : currentArray)
+              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
               return currentArray
             }
           }
           if (prop === 'sortedInsert') {
             return (cmp: (a: any, b: any) => number, ...items: any[]) => {
-              if (typeof cmp !== 'function')
-                return isDerived ? currentArray.map(from).length : currentArray.length
+              if (typeof cmp !== 'function') return currentArray.length
 
-              // Create a copy of the current array
-              const newArray = isDerived ? currentArray.map(from) : [...currentArray]
-              const transformedItems = isDerived ? items.map(to) : items
+              const newArray = [...currentArray]
 
-              // Insert each item in sorted order using binary search
-              for (const item of transformedItems) {
+              for (const item of items) {
                 let left = 0
                 let right = newArray.length
 
@@ -242,7 +235,7 @@ function createNode<T extends FieldValues>(
                 newArray.splice(left, 0, item)
               }
 
-              storeApi.set(path, isDerived ? newArray.map(from) : newArray)
+              storeApi.set(path, isDerived ? newArray.map(to) : newArray)
               return newArray.length
             }
           }
