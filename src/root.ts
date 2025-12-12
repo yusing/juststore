@@ -88,7 +88,11 @@ function createStoreRoot<T extends FieldValues>(
     },
     notify: <P extends FieldPath<T>>(path: P) => {
       const value = getNestedValue(getSnapshot(namespace), path)
-      return notifyListeners(joinPath(namespace, path), value, value, true, true)
+      return notifyListeners(joinPath(namespace, path), value, value, {
+        skipRoot: true,
+        skipChildren: true,
+        forceNotify: true
+      })
     },
     useState: <P extends FieldPath<T>>(path: P) => {
       const fullPathRef = useRef(joinPath(namespace, path))

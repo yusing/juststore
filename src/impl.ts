@@ -220,9 +220,20 @@ function notifyListeners(
   key: string,
   oldValue: unknown,
   newValue: unknown,
-  skipRoot = false,
-  skipChildren = false
+  { skipRoot = false, skipChildren = false, forceNotify = false } = {}
 ) {
+  if (skipRoot && skipChildren) {
+    if (!forceNotify && isEqual(oldValue, newValue)) {
+      return
+    }
+    // exact match only
+    const listenerSet = listeners.get(key)
+    if (listenerSet) {
+      listenerSet.forEach(listener => listener())
+    }
+    return
+  }
+
   const rootKey = skipRoot ? null : key.split('.').slice(0, 2).join('.')
   const keyPrefix = skipChildren ? null : key + '.'
 
@@ -242,7 +253,7 @@ function notifyListeners(
       const oldChildValue = getNestedValue(oldValue, childPath)
       const newChildValue = getNestedValue(newValue, childPath)
 
-      if (!isEqual(oldChildValue, newChildValue)) {
+      if (forceNotify || !isEqual(oldChildValue, newChildValue)) {
         listenerSet.forEach(listener => listenersToNotify.add(listener))
       }
     }
@@ -250,6 +261,13 @@ function notifyListeners(
 
   // Notify all collected listeners
   listenersToNotify.forEach(listener => listener())
+}
+
+function forceNotifyListeners(
+  key: string,
+  options: { skipRoot?: boolean; skipChildren?: boolean } = {}
+) {
+  notifyListeners(key, undefined, undefined, { ...options, forceNotify: true })
 }
 
 // BroadcastChannel for cross-tab synchronization
