@@ -456,6 +456,7 @@ The store root provides path-based methods for dynamic access:
 
 | Method                                         | Description                                             |
 | ---------------------------------------------- | ------------------------------------------------------- |
+| `.state(path)`                                 | Get the state object for a path                         |
 | `.use(path)`                                   | Subscribe and read value (triggers re-render on change) |
 | `.useDebounce(path, ms)`                       | Subscribe with debounced updates                        |
 | `.useState(path)`                              | Returns `[value, setValue]` tuple                       |

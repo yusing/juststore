@@ -6,6 +6,7 @@ export type {
   ArrayState,
   DeepProxy,
   DerivedStateProps,
+  FullState,
   ObjectState,
   Prettify,
   State,
@@ -73,6 +74,8 @@ type StoreSetStateAction<T> = (
 
 /** Public API returned by createStore(namespace, defaultValue). */
 type StoreRoot<T extends FieldValues> = {
+  /** Get the state object for a path. */
+  state: <P extends FieldPath<T>>(path: P) => FullState<FieldPathValue<T, P>>
   /** Subscribe and read the value at path. Re-renders when the value changes. */
   use: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
   /** Subscribe and read the debounced value at path. Re-renders when the value changes. */
@@ -160,11 +163,7 @@ type State<T> = {
   }: {
     from?: (value: T | undefined) => R
     to?: (value: R) => T | undefined
-  }) => NonNullable<R> extends readonly (infer U)[]
-    ? ArrayState<U>
-    : R extends FieldValues
-      ? ObjectState<R>
-      : State<R>
+  }) => FullState<R>
   /** Notify listener of current value. */
   notify(): void
   /** Render-prop helper for inline usage.
@@ -187,6 +186,12 @@ type State<T> = {
   Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
 }
 
+type FullState<T> =
+  NonNullable<T> extends readonly (infer U)[]
+    ? ArrayState<U>
+    : T extends FieldValues
+      ? ObjectState<T>
+      : State<T>
 type ArrayState<T> = (State<T[]> | State<T[] | undefined>) & ArrayProxy<T>
 type ObjectState<T extends FieldValues | undefined> = State<T> & {
   /** Rename a key in an object. */

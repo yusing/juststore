@@ -12,8 +12,9 @@ import {
   useObject,
   useSubscribe
 } from './impl'
+import { createRootNode } from './node'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
-import type { StoreRenderProps, StoreRoot, StoreShowProps } from './types'
+import type { FullState, StoreRenderProps, StoreRoot, StoreShowProps } from './types'
 
 export { createStoreRoot, type StoreOptions }
 
@@ -49,6 +50,8 @@ function createStoreRoot<T extends FieldValues>(
   produce(namespace, { ...defaultValue, ...(getSnapshot(namespace) ?? {}) }, true, true)
 
   const storeApi: StoreRoot<T> = {
+    state: <P extends FieldPath<T>>(path: P) =>
+      createRootNode(storeApi, path) as FullState<FieldPathValue<T, P>>,
     use: <P extends FieldPath<T>>(path: P) => useObject<T, P>(namespace, path),
     useDebounce: <P extends FieldPath<T>>(path: P, delay: number) =>
       useDebounce<T, P>(namespace, path, delay),
