@@ -1,13 +1,13 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useSyncExternalStore } from 'react'
 import {
   getNestedValue,
   getSnapshot,
-  isEqual,
   joinPath,
   notifyListeners,
   produce,
   rename,
   setLeaf,
+  subscribe,
   useDebounce,
   useObject,
   useSubscribe
@@ -86,15 +86,29 @@ function createStoreRoot<T extends FieldValues>(
       useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),
     useCompute: <P extends FieldPath<T>, R>(path: P, fn: (value: FieldPathValue<T, P>) => R) => {
       const fullPath = joinPath(namespace, path)
-      const initialValue = getSnapshot(fullPath) as FieldPathValue<T, P>
-      const [computedValue, setComputedValue] = useState(() => fn(initialValue))
-      useSubscribe(fullPath, value => {
-        const newValue = fn(value as FieldPathValue<T, P>)
-        if (!isEqual(computedValue, newValue)) {
-          setComputedValue(newValue)
+      const fnRef = useRef(fn)
+      fnRef.current = fn
+
+      // Cache to avoid infinite loops - only recompute when store value changes
+      const cacheRef = useRef<{ storeValue: unknown; computed: R } | null>(null)
+
+      const subscribeToPath = useCallback(
+        (onStoreChange: () => void) => subscribe(fullPath, onStoreChange),
+        [fullPath]
+      )
+      const getComputedSnapshot = useCallback(() => {
+        const storeValue = getSnapshot(fullPath)
+        // Return cached result if store value hasn't changed
+        if (cacheRef.current && cacheRef.current.storeValue === storeValue) {
+          return cacheRef.current.computed
         }
-      })
-      return computedValue
+        // Recompute and cache
+        const computed = fnRef.current(storeValue as FieldPathValue<T, P>)
+        cacheRef.current = { storeValue, computed }
+        return computed
+      }, [fullPath])
+
+      return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
     },
     notify: <P extends FieldPath<T>>(path: P) => {
       const value = getNestedValue(getSnapshot(namespace), path)

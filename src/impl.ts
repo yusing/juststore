@@ -13,6 +13,7 @@ export {
   produce,
   rename,
   setLeaf,
+  subscribe,
   useDebounce,
   useObject,
   useSubscribe
@@ -46,6 +47,7 @@ function isClass(value: unknown): boolean {
  * @returns True if the values are equal, false otherwise
  */
 function isEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
   if (isClass(a) || isClass(b)) return a === b
   return rfcIsEqual(a, b)
 }
