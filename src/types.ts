@@ -189,7 +189,7 @@ type State<T> = {
 type FullState<T> =
   NonNullable<T> extends readonly (infer U)[]
     ? ArrayState<U>
-    : T extends FieldValues
+    : T extends FieldValues | undefined
       ? ObjectState<T>
       : State<T>
 type ArrayState<T> = (State<T[]> | State<T[] | undefined>) & ArrayProxy<T>
