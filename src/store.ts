@@ -1,7 +1,7 @@
 import { createRootNode } from './node'
-import type { FieldValues } from './path'
+import type { FieldPath, FieldValues } from './path'
 import { createStoreRoot, type StoreOptions } from './root'
-import type { DeepProxy, State, StoreRoot } from './types'
+import type { State, StoreRoot } from './types'
 
 export { createStore, type Store }
 
@@ -17,7 +17,7 @@ export { createStore, type Store }
  * - Dynamic deep access via Proxy for ergonomic usage like `store.a.b.c.use()` and `store.a.b.c.set(v)`.
  */
 type Store<T extends FieldValues> = StoreRoot<T> & {
-  [K in keyof T]: NonNullable<T[K]> extends object ? DeepProxy<T[K]> : State<T[K]>
+  [K in keyof T]-?: State<T[K]>
 }
 
 /**
@@ -55,7 +55,7 @@ function createStore<T extends FieldValues>(
         return target[prop as keyof typeof target]
       }
       if (typeof prop === 'string' || typeof prop === 'number') {
-        return createRootNode(target, prop)
+        return createRootNode(target, prop as FieldPath<T>)
       }
       return undefined
     }

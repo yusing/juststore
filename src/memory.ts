@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { createRootNode } from './node'
 import type { FieldValues } from './path'
 import { createStoreRoot } from './root'
-import type { DeepProxy, State } from './types'
+import type { State } from './types'
 
 export { useMemoryStore, type MemoryStore }
 
@@ -16,7 +16,7 @@ export { useMemoryStore, type MemoryStore }
  * - Dynamic deep access via Proxy for ergonomic usage like `state.a.b.c.use()` and `state.a.b.c.set(v)`.
  */
 type MemoryStore<T extends FieldValues> = State<T> & {
-  [K in keyof T]: NonNullable<T[K]> extends object ? DeepProxy<T[K]> : State<T[K]>
+  [K in keyof T]-?: State<T[K]>
 }
 /**
  * React hook that creates a component-scoped memory store.

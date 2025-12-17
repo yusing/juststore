@@ -5,18 +5,25 @@ import { pascalCase } from 'change-case'
 import { useId } from 'react'
 import { getSnapshot, produce } from './impl'
 import { createNode } from './node'
-import type { FieldPath, FieldPathValue, FieldValues } from './path'
+import type { FieldPath, FieldPathValue, FieldValues, Primitive } from './path'
 import { createStoreRoot } from './root'
-import type { AllowedKeys, ArrayProxy, State, StoreRoot } from './types'
+import type {
+  ArrayProxy,
+  ExcludeNullUndefined,
+  ObjectMutationMethods,
+  StoreRoot,
+  ValueState
+} from './types'
 
 export {
   useForm,
   type CreateFormOptions,
   type DeepNonNullable,
-  type FormArrayProxy,
-  type FormDeepProxy,
+  type FormArrayState,
+  type FormObjectState,
   type FormState,
-  type FormStore
+  type FormStore,
+  type FormValueState
 }
 
 /**
@@ -31,36 +38,38 @@ type FormCommon = {
   setError: (error: string | undefined) => void
 }
 
-type FormArrayProxy<T> = ArrayProxy<T> & FormCommon
+type FormState<T> = [ExcludeNullUndefined<T>] extends [readonly (infer U)[]]
+  ? FormArrayState<U>
+  : [T] extends [FieldValues]
+    ? FormObjectState<T>
+    : [ExcludeNullUndefined<T>] extends [FieldValues]
+      ? FormObjectState<ExcludeNullUndefined<T>>
+      : FormValueState<T>
 
-type FormState<T> = State<T> & FormCommon
+interface FormValueState<T> extends ValueState<T>, FormCommon {}
+
+type FormArrayElementState<T> = T extends Primitive ? FormValueState<T> : FormState<T>
+
+interface FormArrayState<T> extends FormValueState<T[]>, ArrayProxy<T, FormArrayElementState<T>> {}
+
+type FormObjectState<T extends FieldValues> = {
+  [K in keyof T]-?: FormState<T[K]>
+} & FormValueState<T> &
+  ObjectMutationMethods
 
 /** Type for nested objects with proxy methods */
-type FormDeepProxy<T> =
-  NonNullable<T> extends readonly (infer U)[]
-    ? FormArrayProxy<U> & FormState<T>
-    : NonNullable<T> extends FieldValues
-      ? {
-          [K in AllowedKeys<NonNullable<T>>]-?: NonNullable<NonNullable<T>[K]> extends object
-            ? FormDeepProxy<NonNullable<T>[K]>
-            : FormState<NonNullable<T>[K]>
-        } & FormState<T>
-      : FormState<T>
-
-/** Type for nested objects with proxy methods */
-type DeepNonNullable<T> =
-  NonNullable<T> extends readonly (infer U)[]
-    ? U[]
-    : NonNullable<T> extends FieldValues
-      ? {
-          [K in keyof NonNullable<T>]-?: DeepNonNullable<NonNullable<T>[K]>
-        }
-      : NonNullable<T>
+type DeepNonNullable<T> = [ExcludeNullUndefined<T>] extends [readonly (infer U)[]]
+  ? U[]
+  : [ExcludeNullUndefined<T>] extends [FieldValues]
+    ? {
+        [K in keyof ExcludeNullUndefined<T>]-?: DeepNonNullable<ExcludeNullUndefined<T>[K]>
+      }
+    : ExcludeNullUndefined<T>
 
 /**
  * The form store type, combining form state with validation and submission handling.
  */
-type FormStore<T extends FieldValues> = FormDeepProxy<T> & {
+type FormStore<T extends FieldValues> = FormState<T> & {
   /** Clears all validation errors from the form. */
   clearErrors(): void
   /** Returns a form submit handler that validates and calls onSubmit with form values. */

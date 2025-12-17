@@ -1,5 +1,5 @@
 import React from 'react'
-import type { Prettify, State } from './types'
+import type { Prettify, State, ValueState } from './types'
 
 export { createMixedState, type MixedState }
 
@@ -8,7 +8,7 @@ export { createMixedState, type MixedState }
  * Provides read-only access via `value`, `use`, `Render`, and `Show`.
  */
 type MixedState<T extends readonly unknown[]> = Prettify<
-  Pick<State<Readonly<T>>, 'value' | 'use' | 'Render' | 'Show'>
+  Pick<ValueState<Readonly<Required<T>>>, 'value' | 'use' | 'Render' | 'Show'>
 >
 
 /**
@@ -27,7 +27,7 @@ type MixedState<T extends readonly unknown[]> = Prettify<
  * </mixedState.Render>
  */
 function createMixedState<T extends readonly unknown[]>(
-  ...states: { [K in keyof T]: State<T[K]> }
+  ...states: { [K in keyof T]-?: State<T[K]> }
 ): MixedState<T> {
   const use = () => states.map(state => state.use()) as unknown as Readonly<T>
   const mixedState = {

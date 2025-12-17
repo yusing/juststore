@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { FieldValues } from './path'
+import type { FieldPath, FieldPathValue, FieldValues } from './path'
 import type { DerivedStateProps, State, StoreRoot } from './types'
 
 export { createNode, createRootNode, type Extension }
@@ -14,7 +14,10 @@ export { createNode, createRootNode, type Extension }
  * @param initialPath - Starting path segment (default: empty string for root)
  * @returns A proxy that intercepts property access and returns nested proxies or state methods
  */
-function createRootNode<T extends FieldValues>(storeApi: StoreRoot<T>, initialPath = ''): State<T> {
+function createRootNode<T extends FieldValues, P extends FieldPath<T>>(
+  storeApi: StoreRoot<T>,
+  initialPath: P = '' as P
+): State<FieldPathValue<T, P>> {
   const proxyCache = new Map<string, any>()
   return createNode(storeApi, initialPath, proxyCache)
 }

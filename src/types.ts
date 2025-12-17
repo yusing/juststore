@@ -1,12 +1,13 @@
-import type { FieldPath, FieldPathValue, FieldValues } from './path'
+import type { FieldPath, FieldPathValue, FieldValues, Primitive } from './path'
 
 export type {
   AllowedKeys,
+  ArrayElementState,
   ArrayProxy,
   ArrayState,
-  DeepProxy,
   DerivedStateProps,
-  FullState,
+  ExcludeNullUndefined,
+  ObjectMutationMethods,
   ObjectState,
   Prettify,
   State,
@@ -14,27 +15,15 @@ export type {
   StoreRoot,
   StoreSetStateAction,
   StoreShowProps,
-  StoreUse
+  StoreUse,
+  ValueState
 }
 
 type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
 
-type AllowedKeys<T> = Exclude<keyof T, keyof State<unknown> | keyof ObjectMutationMethods>
-
-/** Type for nested objects with proxy methods */
-type DeepProxy<T> =
-  NonNullable<T> extends readonly (infer U)[]
-    ? ArrayProxy<U> & State<T>
-    : NonNullable<T> extends FieldValues
-      ? {
-          [K in AllowedKeys<NonNullable<T>>]-?: NonNullable<NonNullable<T>[K]> extends object
-            ? DeepProxy<NonNullable<T>[K]>
-            : State<NonNullable<T>[K]>
-        } & State<T> &
-          ObjectMutationMethods
-      : State<T>
+type AllowedKeys<T> = Exclude<keyof T, keyof ValueState<unknown> | keyof ObjectMutationMethods>
 
 type ArrayMutationMethods<T> = Pick<
   Array<T>,
@@ -42,9 +31,9 @@ type ArrayMutationMethods<T> = Pick<
 >
 
 /** Type for array proxy with index access */
-type ArrayProxy<T> = Prettify<ArrayMutationMethods<T>> & {
+type ArrayProxy<T, ElementState = ArrayElementState<T>> = Prettify<ArrayMutationMethods<T>> & {
   /** Read without subscribing. Returns array or undefined for missing paths. */
-  readonly value: T[] | undefined
+  readonly value: T[]
   /**
    * Length of the underlying array. Runtime may return undefined when the
    * current value is not an array at the path. Prefer `Array.isArray(x) && x.length` when unsure.
@@ -53,14 +42,15 @@ type ArrayProxy<T> = Prettify<ArrayMutationMethods<T>> & {
   /** Numeric index access never returns undefined at the type level because
    * the proxy always returns another proxy object, even if the underlying value doesn't exist.
    */
-  [K: number]: T extends object ? DeepProxy<T> : State<T>
+  [K: number]: ElementState
   /** Safe accessor that never returns undefined at the type level */
-  at(index: number): T extends object ? DeepProxy<T> : State<T>
+  at(index: number): ElementState
   /** Insert items into the array in sorted order using the provided comparison function. */
   sortedInsert(cmp: (a: T, b: T) => number, ...items: T[]): number
 }
 
 type ObjectMutationMethods = {
+  /** Rename a key in an object. */
   rename: (oldKey: string, newKey: string, notifyObject?: boolean) => void
 }
 
@@ -75,7 +65,7 @@ type StoreSetStateAction<T> = (
 /** Public API returned by createStore(namespace, defaultValue). */
 type StoreRoot<T extends FieldValues> = {
   /** Get the state object for a path. */
-  state: <P extends FieldPath<T>>(path: P) => FullState<FieldPathValue<T, P>>
+  state: <P extends FieldPath<T>>(path: P) => State<FieldPathValue<T, P>>
   /** Subscribe and read the value at path. Re-renders when the value changes. */
   use: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
   /** Subscribe and read the debounced value at path. Re-renders when the value changes. */
@@ -122,7 +112,7 @@ type StoreRoot<T extends FieldValues> = {
 }
 
 /** Common methods available on any deep proxy node */
-type State<T> = {
+type ValueState<T> = {
   /** Read without subscribing. */
   readonly value: T
   /** The field name for the proxy. */
@@ -163,7 +153,7 @@ type State<T> = {
   }: {
     from?: (value: T | undefined) => R
     to?: (value: R) => T | undefined
-  }) => FullState<R>
+  }) => State<R>
   /** Notify listener of current value. */
   notify(): void
   /** Render-prop helper for inline usage.
@@ -186,19 +176,24 @@ type State<T> = {
   Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
 }
 
-type FullState<T> =
-  NonNullable<T> extends readonly (infer U)[]
-    ? ArrayState<U>
-    : T extends FieldValues | undefined
-      ? ObjectState<T>
-      : State<T>
-type ArrayState<T> = (State<T[]> | State<T[] | undefined>) & ArrayProxy<T>
-type ObjectState<T extends FieldValues | undefined> = State<T> & {
-  /** Rename a key in an object. */
-  rename: (oldKey: string, newKey: string, notifyObject?: boolean) => void
-} & {
-  [K in keyof T]: State<T[K]>
-}
+type ExcludeNullUndefined<T> = Exclude<T, undefined | null>
+
+type ArrayElementState<T> = T extends Primitive ? ValueState<T> : State<T>
+
+type State<T> = [ExcludeNullUndefined<T>] extends [readonly (infer U)[]]
+  ? ArrayState<U>
+  : [T] extends [FieldValues]
+    ? ObjectState<T>
+    : [ExcludeNullUndefined<T>] extends [FieldValues]
+      ? ObjectState<ExcludeNullUndefined<T>>
+      : ValueState<T>
+
+interface ArrayState<T> extends ValueState<T[]>, ArrayProxy<T> {}
+
+type ObjectState<T extends FieldValues> = {
+  [K in keyof T]-?: State<T[K]>
+} & ValueState<T> &
+  ObjectMutationMethods
 
 /** Props for Store.Render helper. */
 type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
