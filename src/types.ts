@@ -1,12 +1,12 @@
-import type { FieldPath, FieldPathValue, FieldValues, Primitive } from './path'
+import type { FieldPath, FieldPathValue, FieldValues, IsEqual } from './path'
 
 export type {
   AllowedKeys,
-  ArrayElementState,
   ArrayProxy,
   ArrayState,
   DerivedStateProps,
-  ExcludeNullUndefined,
+  IsNullable,
+  MaybeNullable,
   ObjectMutationMethods,
   ObjectState,
   Prettify,
@@ -25,13 +25,15 @@ type Prettify<T> = {
 
 type AllowedKeys<T> = Exclude<keyof T, keyof ValueState<unknown> | keyof ObjectMutationMethods>
 
-type ArrayMutationMethods<T> = Pick<
-  Array<T>,
-  'push' | 'pop' | 'shift' | 'unshift' | 'splice' | 'reverse' | 'sort' | 'fill' | 'copyWithin'
+type ArrayMutationMethods<T> = Prettify<
+  Pick<
+    Array<T>,
+    'push' | 'pop' | 'shift' | 'unshift' | 'splice' | 'reverse' | 'sort' | 'fill' | 'copyWithin'
+  >
 >
 
 /** Type for array proxy with index access */
-type ArrayProxy<T, ElementState = ArrayElementState<T>> = Prettify<ArrayMutationMethods<T>> & {
+type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<T> & {
   /** Read without subscribing. Returns array or undefined for missing paths. */
   readonly value: T[]
   /**
@@ -132,9 +134,11 @@ type ValueState<T> = {
   /** Compute a derived value from the current value, similar to useState + useMemo */
   useCompute: <R>(fn: (value: T) => R) => R
   /** Ensure the value is an array. */
-  ensureArray<U>(): ArrayState<U>
+  ensureArray(): NonNullable<T> extends (infer U)[] ? ArrayState<U> : never
   /** Ensure the value is an object. */
-  ensureObject<U extends FieldValues>(): ObjectState<U>
+  ensureObject(): NonNullable<T> extends FieldValues ? ObjectState<NonNullable<T>> : never
+  /** Return a new state with a default value, and make the type non-nullable */
+  withDefault(defaultValue: T): State<NonNullable<T>>
   /** Virtual state derived from the current value.
    *
    * @returns ArrayState if the derived value is an array, ObjectState if the derived value is an object, otherwise State.
@@ -176,23 +180,26 @@ type ValueState<T> = {
   Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
 }
 
-type ExcludeNullUndefined<T> = Exclude<T, undefined | null>
+type MaybeNullable<T, Nullable extends boolean = false> = Nullable extends true ? T | undefined : T
+type IsNullable<T> = T extends undefined | null ? true : false
 
-type ArrayElementState<T> = T extends Primitive ? ValueState<T> : State<T>
+type State<T> =
+  IsEqual<T, unknown> extends true
+    ? never
+    : [NonNullable<T>] extends [readonly (infer U)[]]
+      ? ArrayState<U, IsNullable<T>>
+      : [NonNullable<T>] extends [FieldValues]
+        ? ObjectState<NonNullable<T>, IsNullable<T>>
+        : ValueState<T>
 
-type State<T> = [ExcludeNullUndefined<T>] extends [readonly (infer U)[]]
-  ? ArrayState<U>
-  : [T] extends [FieldValues]
-    ? ObjectState<T>
-    : [ExcludeNullUndefined<T>] extends [FieldValues]
-      ? ObjectState<ExcludeNullUndefined<T>>
-      : ValueState<T>
+type ArrayState<T, Nullable extends boolean = false> =
+  IsEqual<T, unknown> extends true
+    ? never
+    : ValueState<MaybeNullable<T[], Nullable>> & ArrayProxy<T>
 
-interface ArrayState<T> extends ValueState<T[]>, ArrayProxy<T> {}
-
-type ObjectState<T extends FieldValues> = {
+type ObjectState<T extends FieldValues, Nullable extends boolean = false> = {
   [K in keyof T]-?: State<T[K]>
-} & ValueState<T> &
+} & ValueState<MaybeNullable<T, Nullable>> &
   ObjectMutationMethods
 
 /** Props for Store.Render helper. */

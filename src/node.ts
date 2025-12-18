@@ -129,6 +129,10 @@ function createNode<T extends FieldValues>(
         if (prop === 'ensureObject') {
           return () => createNode(storeApi, path, cache, extensions, ensureObject, unchanged)
         }
+        if (prop === 'withDefault') {
+          return (defaultValue: T) =>
+            createNode(storeApi, path, cache, extensions, value => value ?? defaultValue, unchanged)
+        }
 
         if (isObjectMethod(prop)) {
           const derivedValue = from(storeApi.value(path))

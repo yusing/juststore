@@ -1,5 +1,5 @@
+export type * from './form'
 export { useForm } from './form'
-export type { CreateFormOptions, FormState, FormStore } from './form'
 export { useMemoryStore, type MemoryStore } from './memory'
 export { createMixedState, type MixedState } from './mixed_state'
 export type * from './path'

@@ -5,11 +5,12 @@ import { pascalCase } from 'change-case'
 import { useId } from 'react'
 import { getSnapshot, produce } from './impl'
 import { createNode } from './node'
-import type { FieldPath, FieldPathValue, FieldValues, Primitive } from './path'
+import type { FieldPath, FieldPathValue, FieldValues, IsEqual } from './path'
 import { createStoreRoot } from './root'
 import type {
   ArrayProxy,
-  ExcludeNullUndefined,
+  IsNullable,
+  MaybeNullable,
   ObjectMutationMethods,
   StoreRoot,
   ValueState
@@ -38,33 +39,55 @@ type FormCommon = {
   setError: (error: string | undefined) => void
 }
 
-type FormState<T> = [ExcludeNullUndefined<T>] extends [readonly (infer U)[]]
-  ? FormArrayState<U>
-  : [T] extends [FieldValues]
-    ? FormObjectState<T>
-    : [ExcludeNullUndefined<T>] extends [FieldValues]
-      ? FormObjectState<ExcludeNullUndefined<T>>
-      : FormValueState<T>
+type FormState<T> =
+  IsEqual<T, unknown> extends true
+    ? never
+    : [NonNullable<T>] extends [readonly (infer U)[]]
+      ? FormArrayState<U, IsNullable<T>>
+      : [NonNullable<T>] extends [FieldValues]
+        ? FormObjectState<NonNullable<T>, IsNullable<T>>
+        : FormValueState<T>
 
-interface FormValueState<T> extends ValueState<T>, FormCommon {}
+interface FormValueState<T> extends Omit<ValueState<T>, 'withDefault' | 'derived'>, FormCommon {
+  /** Return a new state with a default value, and make the type non-nullable */
+  withDefault(defaultValue: T): FormState<NonNullable<T>>
+  /** Virtual state derived from the current value.
+   *
+   * @returns ArrayState if the derived value is an array, ObjectState if the derived value is an object, otherwise State.
+   * @example
+   * const state = store.a.b.c.derived({
+   *   from: value => value + 1,
+   *   to: value => value - 1
+   * })
+   * state.use() // returns the derived value
+   * state.set(10) // sets the derived value
+   * state.reset() // resets the derived value
+   */
+  derived: <R>({
+    from,
+    to
+  }: {
+    from?: (value: T | undefined) => R
+    to?: (value: R) => T | undefined
+  }) => FormState<R>
+}
 
-type FormArrayElementState<T> = T extends Primitive ? FormValueState<T> : FormState<T>
+type FormArrayState<T, Nullable extends boolean = false, TT = MaybeNullable<T[], Nullable>> =
+  IsEqual<T, unknown> extends true ? never : FormValueState<TT[]> & ArrayProxy<TT, FormState<TT>>
 
-interface FormArrayState<T> extends FormValueState<T[]>, ArrayProxy<T, FormArrayElementState<T>> {}
-
-type FormObjectState<T extends FieldValues> = {
+type FormObjectState<T extends FieldValues, Nullable extends boolean = false> = {
   [K in keyof T]-?: FormState<T[K]>
-} & FormValueState<T> &
+} & FormValueState<MaybeNullable<T, Nullable>> &
   ObjectMutationMethods
 
 /** Type for nested objects with proxy methods */
-type DeepNonNullable<T> = [ExcludeNullUndefined<T>] extends [readonly (infer U)[]]
+type DeepNonNullable<T> = [NonNullable<T>] extends [readonly (infer U)[]]
   ? U[]
-  : [ExcludeNullUndefined<T>] extends [FieldValues]
+  : [NonNullable<T>] extends [FieldValues]
     ? {
-        [K in keyof ExcludeNullUndefined<T>]-?: DeepNonNullable<ExcludeNullUndefined<T>[K]>
+        [K in keyof NonNullable<T>]-?: DeepNonNullable<NonNullable<T>[K]>
       }
-    : ExcludeNullUndefined<T>
+    : NonNullable<T>
 
 /**
  * The form store type, combining form state with validation and submission handling.

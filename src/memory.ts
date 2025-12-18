@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { createRootNode } from './node'
 import type { FieldValues } from './path'
 import { createStoreRoot } from './root'
-import type { State } from './types'
+import type { State, ValueState } from './types'
 
 export { useMemoryStore, type MemoryStore }
 
@@ -15,7 +15,7 @@ export { useMemoryStore, type MemoryStore }
  * - Type-safe paths using FieldPath.
  * - Dynamic deep access via Proxy for ergonomic usage like `state.a.b.c.use()` and `state.a.b.c.set(v)`.
  */
-type MemoryStore<T extends FieldValues> = State<T> & {
+type MemoryStore<T extends FieldValues> = ValueState<T> & {
   [K in keyof T]-?: State<T[K]>
 }
 /**
@@ -62,5 +62,5 @@ function useMemoryStore<T extends FieldValues>(defaultValue: T): MemoryStore<T> 
     memoryOnly: true
   })
 
-  return createRootNode(storeApi) as MemoryStore<T>
+  return createRootNode(storeApi) as unknown as MemoryStore<T>
 }
