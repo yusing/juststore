@@ -124,14 +124,30 @@ function createNode<T extends FieldValues>(
           return () => storeApi.notify(path)
         }
         if (prop === 'ensureArray') {
-          return () => createNode(storeApi, path, cache, extensions, ensureArray, unchanged)
+          return () =>
+            createNode(
+              storeApi,
+              path,
+              cache,
+              extensions,
+              value => ensureArray(value, from),
+              unchanged
+            )
         }
         if (prop === 'ensureObject') {
-          return () => createNode(storeApi, path, cache, extensions, ensureObject, unchanged)
+          return () =>
+            createNode(storeApi, path, cache, extensions, value => ensureObject(value, from), to)
         }
         if (prop === 'withDefault') {
           return (defaultValue: T) =>
-            createNode(storeApi, path, cache, extensions, value => value ?? defaultValue, unchanged)
+            createNode(
+              storeApi,
+              path,
+              cache,
+              extensions,
+              value => withDefault(value, defaultValue, from),
+              to
+            )
         }
 
         if (isObjectMethod(prop)) {
@@ -158,7 +174,7 @@ function createNode<T extends FieldValues>(
           if (prop === 'at') {
             return (index: number) => {
               const nextPath = path ? `${path}.${index}` : String(index)
-              return createNode(storeApi, nextPath, cache, extensions, from, to)
+              return createNode(storeApi, nextPath, cache, extensions)
             }
           }
           if (prop === 'length') {
@@ -270,8 +286,7 @@ function createNode<T extends FieldValues>(
 
         if (typeof prop === 'string' || typeof prop === 'number') {
           const nextPath = path ? `${path}.${prop}` : String(prop)
-          // Always return a proxy
-          return createNode(storeApi, nextPath, cache, extensions, from, to)
+          return createNode(storeApi, nextPath, cache, extensions)
         }
         return undefined
       },
@@ -319,14 +334,24 @@ function unchanged(value: any) {
   return value
 }
 
-function ensureArray(value: any) {
-  if (value === undefined || value === null) return []
-  if (Array.isArray(value)) return value
-  return []
+const EMPTY_ARRAY: readonly never[] = []
+const EMPTY_OBJECT: Readonly<Record<string, never>> = {}
+
+function ensureArray(value: any, from: (value: any) => any) {
+  if (value === undefined || value === null) return EMPTY_ARRAY
+  const array = from(value)
+  if (Array.isArray(array)) return array
+  return EMPTY_ARRAY
 }
 
-function ensureObject(value: any) {
-  if (value === undefined || value === null) return {}
-  if (typeof value === 'object') return value
-  return {}
+function ensureObject(value: any, from: (value: any) => any) {
+  if (value === undefined || value === null) return EMPTY_OBJECT
+  const obj = from(value)
+  if (typeof obj === 'object') return obj
+  return EMPTY_OBJECT
+}
+
+function withDefault(value: any, defaultValue: any, from: (value: any) => any) {
+  if (value === undefined || value === null) return defaultValue // defaultValue should've already matched the type
+  return from(value)
 }
