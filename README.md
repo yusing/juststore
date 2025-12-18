@@ -473,22 +473,25 @@ The store root provides path-based methods for dynamic access:
 
 ### State Methods
 
-| Method                                   | Description                                             |
-| ---------------------------------------- | ------------------------------------------------------- |
-| `.use()`                                 | Subscribe and read value (triggers re-render on change) |
-| `.useDebounce(ms)`                       | Subscribe with debounced updates                        |
-| `.useState()`                            | Returns `[value, setValue]` tuple                       |
-| `.value`                                 | Read without subscribing                                |
-| `.set(value)`                            | Update value                                            |
-| `.set(fn)`                               | Functional update                                       |
-| `.reset()`                               | Delete value at path                                    |
-| `.subscribe(fn)`                         | Subscribe to changes (for effects)                      |
-| `.rename(oldKey, newKey, notifyObject?)` | Rename a key in an object                               |
-| `.notify()`                              | Manually trigger subscribers                            |
-| `.useCompute(fn)`                        | Derive a computed value                                 |
-| `.derived({ from, to })`                 | Create bidirectional transform                          |
-| `.Render({ children })`                  | Render prop component                                   |
-| `.Show({ children, on })`                | Conditional render component                            |
+| Method                                   | Description                                                             |
+| ---------------------------------------- | ----------------------------------------------------------------------- |
+| `.use()`                                 | Subscribe and read value (triggers re-render on change)                 |
+| `.useDebounce(ms)`                       | Subscribe with debounced updates                                        |
+| `.useState()`                            | Returns `[value, setValue]` tuple                                       |
+| `.value`                                 | Read without subscribing                                                |
+| `.set(value)`                            | Update value                                                            |
+| `.set(fn)`                               | Functional update                                                       |
+| `.reset()`                               | Delete value at path                                                    |
+| `.subscribe(fn)`                         | Subscribe to changes (for effects)                                      |
+| `.rename(oldKey, newKey, notifyObject?)` | Rename a key in an object                                               |
+| `.notify()`                              | Manually trigger subscribers                                            |
+| `.useCompute(fn)`                        | Derive a computed value                                                 |
+| `.derived({ from, to })`                 | Create bidirectional transform                                          |
+| `.ensureArray()`                         | Ensure the value is an array                                            |
+| `.ensureObject()`                        | Ensure the value is an object                                           |
+| `.withDefault(defaultValue)`             | Return a new state with a default value, and make the type non-nullable |
+| `.Render({ children })`                  | Render prop component                                                   |
+| `.Show({ children, on })`                | Conditional render component                                            |
 
 ## License
 
