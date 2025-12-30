@@ -75,12 +75,8 @@ function createStoreRoot<T extends FieldValues>(
       getSnapshot(joinPath(namespace, path)) as FieldPathValue<T, P>,
     reset: <P extends FieldPath<T>>(path: P) =>
       produce(joinPath(namespace, path), undefined, false, memoryOnly),
-    rename: <P extends FieldPath<T>>(
-      path: P,
-      oldKey: string,
-      newKey: string,
-      notifyObject = true
-    ) => rename(joinPath(namespace, path), oldKey, newKey, notifyObject),
+    rename: <P extends FieldPath<T>>(path: P, oldKey: string, newKey: string) =>
+      rename(joinPath(namespace, path), oldKey, newKey),
     subscribe: <P extends FieldPath<T>>(path: P, listener: (value: FieldPathValue<T, P>) => void) =>
       // eslint-disable-next-line react-hooks/rules-of-hooks
       useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),

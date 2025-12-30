@@ -1,15 +1,7 @@
 import React from 'react'
-import type { Prettify, ValueState } from './types'
+import type { ReadOnlyState, ValueState } from './types'
 
-export { createMixedState, type MixedState }
-
-/**
- * A combined state that aggregates multiple independent states into a tuple.
- * Provides read-only access via `value`, `use`, `Render`, and `Show`.
- */
-type MixedState<T extends readonly unknown[]> = Prettify<
-  Pick<ValueState<Readonly<Required<T>>>, 'value' | 'use' | 'Render' | 'Show'>
->
+export { createMixedState }
 
 /**
  * Creates a mixed state that combines multiple states into a tuple.
@@ -28,13 +20,16 @@ type MixedState<T extends readonly unknown[]> = Prettify<
  */
 function createMixedState<T extends readonly unknown[]>(
   ...states: { [K in keyof T]-?: ValueState<T[K]> }
-): MixedState<T> {
+): ReadOnlyState<T> {
   const use = () => states.map(state => state.use()) as unknown as Readonly<T>
   const mixedState = {
     get value() {
       return states.map(state => state.value) as unknown as Readonly<T>
     },
     use,
+    useCompute<R>(fn: (value: unknown) => R) {
+      return states.map(state => state.useCompute(value => fn(value)))
+    },
     Render({ children }: { children: (value: Readonly<T>) => React.ReactNode }) {
       const value = use()
       return children(value)
@@ -45,5 +40,5 @@ function createMixedState<T extends readonly unknown[]>(
     }
   } as const
 
-  return mixedState as MixedState<T>
+  return mixedState as ReadOnlyState<T>
 }

@@ -10,6 +10,7 @@ export type {
   ObjectMutationMethods,
   ObjectState,
   Prettify,
+  ReadOnlyState,
   State,
   StoreRenderProps,
   StoreRoot,
@@ -51,9 +52,19 @@ type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<T> & {
   sortedInsert(cmp: (a: T, b: T) => number, ...items: T[]): number
 }
 
+type ObjectProxy<T extends FieldValues> = {
+  /** Virtual state for the object's keys.
+   *
+   * This does NOT read from a real `keys` property on the stored object; it derives from `Object.keys(value)`.
+   */
+  readonly keys: ReadOnlyState<FieldPath<T>[]>
+} & {
+  [K in keyof T]-?: State<T[K]>
+}
+
 type ObjectMutationMethods = {
   /** Rename a key in an object. */
-  rename: (oldKey: string, newKey: string, notifyObject?: boolean) => void
+  rename: (oldKey: string, newKey: string) => void
 }
 
 /** Tuple returned by Store.use(path). */
@@ -87,12 +98,7 @@ type StoreRoot<T extends FieldValues> = {
   /** Delete value at path (for arrays, removes index; for objects, deletes key). */
   reset: <P extends FieldPath<T>>(path: P) => void
   /** Rename a key in an object. */
-  rename: <P extends FieldPath<T>>(
-    path: P,
-    oldKey: string,
-    newKey: string,
-    notifyObject?: boolean
-  ) => void
+  rename: <P extends FieldPath<T>>(path: P, oldKey: string, newKey: string) => void
   /** Subscribe to changes at path and invoke listener with the new value. */
   subscribe: <P extends FieldPath<T>>(
     path: P,
@@ -180,6 +186,13 @@ type ValueState<T> = {
   Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
 }
 
+/**
+ * A read-only state that provides access to the value, use, Render, and Show methods.
+ */
+type ReadOnlyState<T> = Prettify<
+  Pick<ValueState<Readonly<Required<T>>>, 'value' | 'use' | 'useCompute' | 'Render' | 'Show'>
+>
+
 type MaybeNullable<T, Nullable extends boolean = false> = Nullable extends true ? T | undefined : T
 type IsNullable<T> = T extends undefined | null ? true : false
 
@@ -197,9 +210,8 @@ type ArrayState<T, Nullable extends boolean = false> =
     ? never
     : ValueState<MaybeNullable<T[], Nullable>> & ArrayProxy<T>
 
-type ObjectState<T extends FieldValues, Nullable extends boolean = false> = {
-  [K in keyof T]-?: State<T[K]>
-} & ValueState<MaybeNullable<T, Nullable>> &
+type ObjectState<T extends FieldValues, Nullable extends boolean = false> = ObjectProxy<T> &
+  ValueState<MaybeNullable<T, Nullable>> &
   ObjectMutationMethods
 
 /** Props for Store.Render helper. */

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
-import type { DerivedStateProps, State, StoreRoot } from './types'
+import type { DerivedStateProps, ReadOnlyState, State, StoreRoot } from './types'
 
 export { createNode, createRootNode, type Extension }
 
@@ -157,9 +157,18 @@ function createNode<T extends FieldValues>(
           }
 
           if (prop === 'rename') {
-            return (oldKey: string, newKey: string, notifyObject?: boolean) => {
-              storeApi.rename(path, oldKey, newKey, notifyObject)
+            return (oldKey: string, newKey: string) => storeApi.rename(path, oldKey, newKey)
+          }
+          if (prop === 'keys') {
+            const cacheKey = `${path}.__juststore_keys`
+            if (!isDerived && cache.has(cacheKey)) {
+              return cache.get(cacheKey)
             }
+            const keysNode = createKeysNode(storeApi, path, value => ensureObject(value, from))
+            if (!isDerived) {
+              cache.set(cacheKey, keysNode)
+            }
+            return keysNode
           }
         }
 
@@ -327,7 +336,7 @@ function isArrayMethod(prop: string | symbol) {
 }
 
 function isObjectMethod(prop: string | symbol) {
-  return prop === 'rename'
+  return prop === 'rename' || prop === 'keys'
 }
 
 function unchanged(value: any) {
@@ -336,6 +345,44 @@ function unchanged(value: any) {
 
 const EMPTY_ARRAY: readonly never[] = []
 const EMPTY_OBJECT: Readonly<Record<string, never>> = {}
+
+function createKeysNode(
+  storeApi: StoreRoot<any>,
+  path: string,
+  getObjectValue: (value: any) => Readonly<Record<string, any>>
+): ReadOnlyState<string[]> {
+  const signalPath = path ? `${path}.__juststore_keys` : '__juststore_keys'
+  const computeKeys = () => {
+    return Object.keys(getObjectValue(storeApi.value(path)))
+  }
+
+  return new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'use') return () => storeApi.useCompute(signalPath, computeKeys)
+        if (prop === 'value') return computeKeys()
+        if (prop === 'useCompute') {
+          return <R>(fn: (value: any) => R) => {
+            return storeApi.useCompute(signalPath, () => fn(computeKeys()))
+          }
+        }
+        if (prop === 'Render') {
+          return ({ children }: { children: (value: any, update: (value: any) => void) => any }) =>
+            children(storeApi.useCompute(signalPath, computeKeys), () => {})
+        }
+        if (prop === 'Show') {
+          return ({ children, on }: { children: any; on: (value: any) => boolean }) => {
+            const value = storeApi.useCompute(signalPath, computeKeys)
+            if (!on(value)) return null
+            return children
+          }
+        }
+        return undefined
+      }
+    }
+  ) as ReadOnlyState<string[]>
+}
 
 function ensureArray(value: any, from: (value: any) => any) {
   if (value === undefined || value === null) return EMPTY_ARRAY

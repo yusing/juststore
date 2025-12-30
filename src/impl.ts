@@ -22,6 +22,11 @@ export {
 const memoryStore = new Map<string, unknown>()
 const listeners = new Map<string, Set<() => void>>()
 const descendantListenerKeysByPrefix = new Map<string, Set<string>>()
+const virtualRevisions = new Map<string, number>()
+
+function isVirtualKey(key: string) {
+  return key.endsWith('.__juststore_keys') || key === '__juststore_keys'
+}
 
 // check if the value is a class instance
 function isClass(value: unknown): boolean {
@@ -231,6 +236,63 @@ function getKeyPrefixes(key: string): string[] {
   return prefixes
 }
 
+function joinChildKey(parent: string, child: string): string {
+  return parent ? `${parent}.${child}` : child
+}
+
+function removeDescendantIndex(prefixes: string[], key: string) {
+  for (const prefix of prefixes) {
+    const prefixKeys = descendantListenerKeysByPrefix.get(prefix)
+    if (!prefixKeys) continue
+    prefixKeys.delete(key)
+    if (prefixKeys.size === 0) {
+      descendantListenerKeysByPrefix.delete(prefix)
+    }
+  }
+}
+
+function addDescendantIndex(prefixes: string[], key: string) {
+  for (const prefix of prefixes) {
+    let set = descendantListenerKeysByPrefix.get(prefix)
+    if (!set) {
+      set = new Set()
+      descendantListenerKeysByPrefix.set(prefix, set)
+    }
+    set.add(key)
+  }
+}
+
+function rekeyListenerKey(oldFullKey: string, newFullKey: string) {
+  if (oldFullKey === newFullKey) return
+
+  const oldSet = listeners.get(oldFullKey)
+  if (oldSet) {
+    let nextSet = listeners.get(newFullKey)
+    if (!nextSet) {
+      nextSet = new Set()
+      listeners.set(newFullKey, nextSet)
+    }
+    for (const cb of oldSet) nextSet.add(cb)
+    listeners.delete(oldFullKey)
+  }
+
+  const oldPrefixes = getKeyPrefixes(oldFullKey)
+  const newPrefixes = getKeyPrefixes(newFullKey)
+  removeDescendantIndex(oldPrefixes, oldFullKey)
+  addDescendantIndex(newPrefixes, newFullKey)
+}
+
+function rekeyListenerSubtree(oldPrefix: string, newPrefix: string) {
+  if (oldPrefix === newPrefix) return
+  const keys = Array.from(listeners.keys())
+  for (const k of keys) {
+    if (k === oldPrefix || k.startsWith(oldPrefix + '.')) {
+      const nextKey = newPrefix + k.slice(oldPrefix.length)
+      rekeyListenerKey(k, nextKey)
+    }
+  }
+}
+
 /**
  * Notifies all relevant listeners when a value changes.
  *
@@ -309,6 +371,9 @@ function forceNotifyListeners(
   key: string,
   options: { skipRoot?: boolean; skipChildren?: boolean } = {}
 ) {
+  if (isVirtualKey(key)) {
+    virtualRevisions.set(key, (virtualRevisions.get(key) ?? 0) + 1)
+  }
   notifyListeners(key, undefined, undefined, { ...options, forceNotify: true })
 }
 
@@ -414,6 +479,9 @@ const store: KeyValueStore = {
 
 /** Snapshot getter used by React's useSyncExternalStore. */
 function getSnapshot(key: string) {
+  if (isVirtualKey(key)) {
+    return virtualRevisions.get(key) ?? 0
+  }
   return store.get(key)
 }
 
@@ -515,30 +583,29 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
  * @param path - The full key path to rename
  * @param oldKey - The old key to rename
  * @param newKey - The new key to rename to
- * @param notifyObject - Whether to notify listeners to the object path
  */
-function rename(path: string, oldKey: string, newKey: string, notifyObject = true) {
+function rename(path: string, oldKey: string, newKey: string) {
   const current = store.get(path)
   if (current === undefined || current === null || typeof current !== 'object') {
     // assign a new object with the new key
     store.set(path, { [newKey]: undefined })
-    if (notifyObject) {
-      forceNotifyListeners(path, { skipChildren: true })
-    }
+    forceNotifyListeners(joinChildKey(path, '__juststore_keys'))
     return
   }
+
+  const oldChildKey = joinChildKey(path, oldKey)
+  const newChildKey = joinChildKey(path, newKey)
+  rekeyListenerSubtree(oldChildKey, newChildKey)
 
   const oldValue = (current as Record<string, unknown>)[oldKey]
   const newObject = { ...current, [oldKey]: undefined, [newKey]: oldValue }
   delete newObject[oldKey]
   store.set(path, newObject)
+  forceNotifyListeners(joinChildKey(path, '__juststore_keys'))
   if (oldValue !== undefined) {
-    forceNotifyListeners(joinPath(path, oldKey))
+    forceNotifyListeners(oldChildKey)
   }
-  forceNotifyListeners(joinPath(path, newKey))
-  if (notifyObject) {
-    forceNotifyListeners(path, { skipChildren: true })
-  }
+  forceNotifyListeners(newChildKey)
 }
 
 /**
