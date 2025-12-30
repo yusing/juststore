@@ -85,18 +85,22 @@ function createStoreRoot<T extends FieldValues>(
       // eslint-disable-next-line react-hooks/rules-of-hooks
       useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),
     useCompute: <P extends FieldPath<T>, R>(path: P, fn: (value: FieldPathValue<T, P>) => R) => {
-      const fullPathRef = useRef(joinPath(namespace, path))
+      const fullPath = joinPath(namespace, path)
       const fnRef = useRef(fn)
       fnRef.current = fn
 
-      const cacheRef = useRef<{ storeValue: unknown; computed: R } | null>(null)
+      const cacheRef = useRef<{ path: string; storeValue: unknown; computed: R } | null>(null)
 
       const subscribeToPath = useCallback(
-        (onStoreChange: () => void) => subscribe(fullPathRef.current, onStoreChange),
-        []
+        (onStoreChange: () => void) => subscribe(fullPath, onStoreChange),
+        [fullPath]
       )
       const getComputedSnapshot = useCallback(() => {
-        const storeValue = getSnapshot(fullPathRef.current)
+        if (cacheRef.current && cacheRef.current.path !== fullPath) {
+          cacheRef.current = null
+        }
+
+        const storeValue = getSnapshot(fullPath)
         if (cacheRef.current && isEqual(cacheRef.current.storeValue, storeValue)) {
           // same store value, return the same computed value
           return cacheRef.current.computed
@@ -111,9 +115,9 @@ function createStoreRoot<T extends FieldValues>(
           return cacheRef.current.computed
         }
 
-        cacheRef.current = { storeValue, computed: computedNext }
+        cacheRef.current = { path: fullPath, storeValue, computed: computedNext }
         return computedNext
-      }, [])
+      }, [fullPath])
 
       return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
     },
@@ -126,23 +130,23 @@ function createStoreRoot<T extends FieldValues>(
       })
     },
     useState: <P extends FieldPath<T>>(path: P) => {
-      const fullPathRef = useRef(joinPath(namespace, path))
+      const fullPath = joinPath(namespace, path)
       const setValue = useCallback(
         <V extends FieldPathValue<T, P> | undefined>(value: V | ((prev: V) => V)) => {
           if (typeof value === 'function') {
-            const currentValue = getSnapshot(fullPathRef.current) as V
+            const currentValue = getSnapshot(fullPath) as V
             const newValue = value(currentValue)
             return setLeaf<T, P>(namespace, path, newValue, false, memoryOnly)
           }
           return setLeaf<T, P>(namespace, path, value, false, memoryOnly)
         },
-        [path]
+        [fullPath, path]
       )
-      return [useObject<T, P>(fullPathRef.current), setValue] as const
+      return [useObject<T, P>(namespace, path), setValue] as const
     },
     Render: <P extends FieldPath<T>>({ path, children }: StoreRenderProps<T, P>) => {
-      const fullPathRef = useRef(joinPath(namespace, path))
-      const value = useObject<T, P>(fullPathRef.current)
+      const fullPath = joinPath(namespace, path)
+      const value = useObject<T, P>(namespace, path)
       const update = useCallback(
         (
           value:
@@ -151,15 +155,13 @@ function createStoreRoot<T extends FieldValues>(
             | undefined
         ) => {
           if (typeof value === 'function') {
-            const currentValue = getSnapshot(fullPathRef.current) as
-              | FieldPathValue<T, P>
-              | undefined
+            const currentValue = getSnapshot(fullPath) as FieldPathValue<T, P> | undefined
             const newValue = value(currentValue)
             return setLeaf(namespace, path, newValue, false, memoryOnly)
           }
           return setLeaf(namespace, path, value, false, memoryOnly)
         },
-        [path]
+        [fullPath, path]
       )
       return children(value, update)
     },
