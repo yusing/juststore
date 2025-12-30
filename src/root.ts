@@ -2,6 +2,7 @@ import { useCallback, useRef, useSyncExternalStore } from 'react'
 import {
   getNestedValue,
   getSnapshot,
+  isEqual,
   joinPath,
   notifyListeners,
   produce,
@@ -84,28 +85,35 @@ function createStoreRoot<T extends FieldValues>(
       // eslint-disable-next-line react-hooks/rules-of-hooks
       useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),
     useCompute: <P extends FieldPath<T>, R>(path: P, fn: (value: FieldPathValue<T, P>) => R) => {
-      const fullPath = joinPath(namespace, path)
+      const fullPathRef = useRef(joinPath(namespace, path))
       const fnRef = useRef(fn)
       fnRef.current = fn
 
-      // Cache to avoid infinite loops - only recompute when store value changes
       const cacheRef = useRef<{ storeValue: unknown; computed: R } | null>(null)
 
       const subscribeToPath = useCallback(
-        (onStoreChange: () => void) => subscribe(fullPath, onStoreChange),
-        [fullPath]
+        (onStoreChange: () => void) => subscribe(fullPathRef.current, onStoreChange),
+        []
       )
       const getComputedSnapshot = useCallback(() => {
-        const storeValue = getSnapshot(fullPath)
-        // Return cached result if store value hasn't changed
-        if (cacheRef.current && cacheRef.current.storeValue === storeValue) {
+        const storeValue = getSnapshot(fullPathRef.current)
+        if (cacheRef.current && isEqual(cacheRef.current.storeValue, storeValue)) {
+          // same store value, return the same computed value
           return cacheRef.current.computed
         }
-        // Recompute and cache
-        const computed = fnRef.current(storeValue as FieldPathValue<T, P>)
-        cacheRef.current = { storeValue, computed }
-        return computed
-      }, [fullPath])
+        const computedNext = fnRef.current(storeValue as FieldPathValue<T, P>)
+
+        // Important: even if storeValue changed, we should avoid forcing a re-render
+        // when the computed result is logically unchanged. `useSyncExternalStore`
+        // uses `Object.is` on the snapshot; returning the same reference will bail out.
+        if (cacheRef.current && isEqual(cacheRef.current.computed, computedNext)) {
+          cacheRef.current.storeValue = storeValue
+          return cacheRef.current.computed
+        }
+
+        cacheRef.current = { storeValue, computed: computedNext }
+        return computedNext
+      }, [])
 
       return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
     },
