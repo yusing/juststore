@@ -23,9 +23,63 @@ const memoryStore = new Map<string, unknown>()
 const listeners = new Map<string, Set<() => void>>()
 const descendantListenerKeysByPrefix = new Map<string, Set<string>>()
 const virtualRevisions = new Map<string, number>()
+const keyOrderSymbol = Symbol.for('juststore.key_order')
+const orderedProxyCache = new WeakMap<object, object>()
 
 function isVirtualKey(key: string) {
   return key.endsWith('.__juststore_keys') || key === '__juststore_keys'
+}
+
+function setKeyOrder(target: object, keys: string[]) {
+  Object.defineProperty(target, keyOrderSymbol, {
+    value: keys,
+    configurable: true
+  })
+}
+
+function getKeyOrder(target: Record<string | symbol, unknown>): string[] | undefined {
+  return target[keyOrderSymbol] as string[] | undefined
+}
+
+function getOrderedKeysProxy<T extends Record<string, unknown>>(target: T): T {
+  const cached = orderedProxyCache.get(target)
+  if (cached) return cached as T
+
+  const proxy = new Proxy(target, {
+    ownKeys(t) {
+      const all = Reflect.ownKeys(t)
+      const desired = getKeyOrder(t)
+      if (!desired) return all
+
+      const desiredSet = new Set(desired)
+      const ordered: (string | symbol)[] = []
+      for (const k of desired) {
+        if (Object.prototype.hasOwnProperty.call(t, k)) ordered.push(k)
+      }
+
+      for (const k of all) {
+        if (typeof k === 'string') {
+          if (desiredSet.has(k)) continue
+          ordered.push(k)
+          continue
+        }
+        ordered.push(k)
+      }
+      return ordered
+    },
+    getOwnPropertyDescriptor(t, prop) {
+      return Reflect.getOwnPropertyDescriptor(t, prop)
+    },
+    get(t, prop, receiver) {
+      return Reflect.get(t, prop, receiver)
+    },
+    has(t, prop) {
+      return Reflect.has(t, prop)
+    }
+  })
+
+  orderedProxyCache.set(target, proxy as object)
+  return proxy
 }
 
 // check if the value is a class instance
@@ -41,6 +95,12 @@ function isClass(value: unknown): boolean {
     if (descriptors[key]?.get) return true
   }
   return false
+}
+
+function isRecord(value: unknown): boolean {
+  if (value === null || value === undefined) return false
+  if (typeof value !== 'object') return false
+  return !Array.isArray(value) && !isClass(value)
 }
 
 /** Compare two values for equality
@@ -310,6 +370,24 @@ function notifyListeners(
   newValue: unknown,
   { skipRoot = false, skipChildren = false, forceNotify = false } = {}
 ) {
+  // Keep `state.xxx.keys()` in sync: any mutation under a path can change the set of
+  // keys for that path (or its ancestors). Keys are represented as virtual nodes at
+  // `${path}.__juststore_keys`, so we bump those virtual nodes here.
+  //
+  // Important: avoid recursion when *we* are notifying a virtual key.
+  if (!isVirtualKey(key)) {
+    const paths = [...getKeyPrefixes(key), key]
+    for (const p of paths) {
+      const virtualKey = joinChildKey(p, '__juststore_keys')
+      const listenerSet = listeners.get(virtualKey)
+      if (listenerSet && listenerSet.size > 0) {
+        // Only notify the virtual key subscribers; the current call will handle
+        // ancestors/children for the real key.
+        notifyVirtualKey(virtualKey)
+      }
+    }
+  }
+
   if (skipRoot && skipChildren) {
     if (!forceNotify && isEqual(oldValue, newValue)) {
       return
@@ -352,6 +430,25 @@ function notifyListeners(
     const childKeys = descendantListenerKeysByPrefix.get(key)
     if (childKeys) {
       for (const childKey of childKeys) {
+        if (isVirtualKey(childKey)) {
+          const childPath = childKey.slice(key.length + 1)
+          const suffix = '.__juststore_keys'
+          const objectPath = childPath.endsWith(suffix) ? childPath.slice(0, -suffix.length) : ''
+
+          const getKeys = (root: unknown) => {
+            const obj = objectPath ? getNestedValue(root, objectPath) : root
+            return obj && typeof obj === 'object' && !Array.isArray(obj) ? Object.keys(obj) : []
+          }
+
+          const oldKeys = getKeys(oldValue)
+          const newKeys = getKeys(newValue)
+
+          if (forceNotify || !isEqual(oldKeys, newKeys)) {
+            notifyVirtualKey(childKey)
+          }
+          continue
+        }
+
         const childPath = childKey.slice(key.length + 1)
         const oldChildValue = getNestedValue(oldValue, childPath)
         const newChildValue = getNestedValue(newValue, childPath)
@@ -367,14 +464,13 @@ function notifyListeners(
   }
 }
 
-function forceNotifyListeners(
-  key: string,
-  options: { skipRoot?: boolean; skipChildren?: boolean } = {}
-) {
-  if (isVirtualKey(key)) {
-    virtualRevisions.set(key, (virtualRevisions.get(key) ?? 0) + 1)
-  }
-  notifyListeners(key, undefined, undefined, { ...options, forceNotify: true })
+function notifyVirtualKey(key: string) {
+  virtualRevisions.set(key, (virtualRevisions.get(key) ?? 0) + 1)
+  notifyListeners(key, undefined, undefined, {
+    skipRoot: true,
+    skipChildren: true,
+    forceNotify: true
+  })
 }
 
 // BroadcastChannel for cross-tab synchronization
@@ -482,7 +578,11 @@ function getSnapshot(key: string) {
   if (isVirtualKey(key)) {
     return virtualRevisions.get(key) ?? 0
   }
-  return store.get(key)
+  const value = store.get(key)
+  if (isRecord(value) && getKeyOrder(value as Record<string | symbol, unknown>)) {
+    return getOrderedKeysProxy(value as Record<string, unknown>)
+  }
+  return value
 }
 
 // Cross-tab synchronization: keep memoryStore in sync with BroadcastChannel events
@@ -564,6 +664,10 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
 
   if (isEqual(current, value)) return
   store.set(key, value, memoryOnly)
+  if (isRecord(value)) {
+    const v = value as Record<string | symbol, unknown>
+    setKeyOrder(v, getKeyOrder(v) ?? Object.keys(v))
+  }
 
   if (skipUpdate) return
 
@@ -588,8 +692,10 @@ function rename(path: string, oldKey: string, newKey: string) {
   const current = store.get(path)
   if (current === undefined || current === null || typeof current !== 'object') {
     // assign a new object with the new key
-    store.set(path, { [newKey]: undefined })
-    forceNotifyListeners(joinChildKey(path, '__juststore_keys'))
+    const next = { [newKey]: undefined }
+    store.set(path, next)
+    setKeyOrder(next, [newKey])
+    notifyListeners(path, current, next)
     return
   }
 
@@ -597,15 +703,20 @@ function rename(path: string, oldKey: string, newKey: string) {
   const newChildKey = joinChildKey(path, newKey)
   rekeyListenerSubtree(oldChildKey, newChildKey)
 
-  const oldValue = (current as Record<string, unknown>)[oldKey]
-  const newObject = { ...current, [oldKey]: undefined, [newKey]: oldValue }
-  delete newObject[oldKey]
-  store.set(path, newObject)
-  forceNotifyListeners(joinChildKey(path, '__juststore_keys'))
-  if (oldValue !== undefined) {
-    forceNotifyListeners(oldChildKey)
+  // maintain order of entries
+  const newEntries = Object.entries(current)
+
+  for (let index = 0; index < newEntries.length; index++) {
+    const [key, value] = newEntries[index]
+    if (key === oldKey) {
+      newEntries[index] = [newKey, value]
+    }
   }
-  forceNotifyListeners(newChildKey)
+
+  const newObject = Object.fromEntries(newEntries)
+  store.set(path, newObject)
+  setKeyOrder(newObject, Array.from(new Set(newEntries.map(([k]) => k))))
+  notifyListeners(path, current, newObject)
 }
 
 /**
