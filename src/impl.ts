@@ -577,15 +577,15 @@ function subscribe(key: string, listener: () => void) {
       keyListeners.delete(listener)
       if (keyListeners.size === 0) {
         listeners.delete(key)
-      }
-    }
 
-    for (const prefix of prefixes) {
-      const prefixKeys = descendantListenerKeysByPrefix.get(prefix)
-      if (prefixKeys) {
-        prefixKeys.delete(key)
-        if (prefixKeys.size === 0) {
-          descendantListenerKeysByPrefix.delete(prefix)
+        for (const prefix of prefixes) {
+          const prefixKeys = descendantListenerKeysByPrefix.get(prefix)
+          if (prefixKeys) {
+            prefixKeys.delete(key)
+            if (prefixKeys.size === 0) {
+              descendantListenerKeysByPrefix.delete(prefix)
+            }
+          }
         }
       }
     }
