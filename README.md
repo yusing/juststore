@@ -454,44 +454,46 @@ Creates a form store with validation support.
 
 The store root provides path-based methods for dynamic access:
 
-| Method                                         | Description                                             |
-| ---------------------------------------------- | ------------------------------------------------------- |
-| `.state(path)`                                 | Get the state object for a path                         |
-| `.use(path)`                                   | Subscribe and read value (triggers re-render on change) |
-| `.useDebounce(path, ms)`                       | Subscribe with debounced updates                        |
-| `.useState(path)`                              | Returns `[value, setValue]` tuple                       |
-| `.value(path)`                                 | Read without subscribing                                |
-| `.set(path, value)`                            | Update value                                            |
-| `.set(path, fn)`                               | Functional update                                       |
-| `.reset(path)`                                 | Delete value at path                                    |
-| `.rename(path, oldKey, newKey, notifyObject?)` | Rename a key in an object                               |
-| `.subscribe(path, fn)`                         | Subscribe to changes (for effects)                      |
-| `.notify(path)`                                | Manually trigger subscribers                            |
-| `.useCompute(path, fn)`                        | Derive a computed value                                 |
-| `.Render({ path, children })`                  | Render prop component                                   |
-| `.Show({ path, children, on })`                | Conditional render component                            |
+| Method                          | Description                                             |
+| ------------------------------- | ------------------------------------------------------- |
+| `.state(path)`                  | Get the state object for a path                         |
+| `.use(path)`                    | Subscribe and read value (triggers re-render on change) |
+| `.useDebounce(path, ms)`        | Subscribe with debounced updates                        |
+| `.useState(path)`               | Returns `[value, setValue]` tuple                       |
+| `.value(path)`                  | Read without subscribing                                |
+| `.set(path, value)`             | Update value                                            |
+| `.set(path, fn)`                | Functional update                                       |
+| `.reset(path)`                  | Delete value at path                                    |
+| `.rename(path, oldKey, newKey)` | Rename a key in an object                               |
+| `.keys(path)`                   | Get the readonly state of keys of an object             |
+| `.subscribe(path, fn)`          | Subscribe to changes (for effects)                      |
+| `.notify(path)`                 | Manually trigger subscribers                            |
+| `.useCompute(path, fn)`         | Derive a computed value                                 |
+| `.Render({ path, children })`   | Render prop component                                   |
+| `.Show({ path, children, on })` | Conditional render component                            |
 
 ### State Methods
 
-| Method                                   | Description                                                             |
-| ---------------------------------------- | ----------------------------------------------------------------------- |
-| `.use()`                                 | Subscribe and read value (triggers re-render on change)                 |
-| `.useDebounce(ms)`                       | Subscribe with debounced updates                                        |
-| `.useState()`                            | Returns `[value, setValue]` tuple                                       |
-| `.value`                                 | Read without subscribing                                                |
-| `.set(value)`                            | Update value                                                            |
-| `.set(fn)`                               | Functional update                                                       |
-| `.reset()`                               | Delete value at path                                                    |
-| `.subscribe(fn)`                         | Subscribe to changes (for effects)                                      |
-| `.rename(oldKey, newKey, notifyObject?)` | Rename a key in an object                                               |
-| `.notify()`                              | Manually trigger subscribers                                            |
-| `.useCompute(fn)`                        | Derive a computed value                                                 |
-| `.derived({ from, to })`                 | Create bidirectional transform                                          |
-| `.ensureArray()`                         | Ensure the value is an array                                            |
-| `.ensureObject()`                        | Ensure the value is an object                                           |
-| `.withDefault(defaultValue)`             | Return a new state with a default value, and make the type non-nullable |
-| `.Render({ children })`                  | Render prop component                                                   |
-| `.Show({ children, on })`                | Conditional render component                                            |
+| Method                       | Description                                                             |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `.use()`                     | Subscribe and read value (triggers re-render on change)                 |
+| `.useDebounce(ms)`           | Subscribe with debounced updates                                        |
+| `.useState()`                | Returns `[value, setValue]` tuple                                       |
+| `.value`                     | Read without subscribing                                                |
+| `.set(value)`                | Update value                                                            |
+| `.set(fn)`                   | Functional update                                                       |
+| `.reset()`                   | Delete value at path                                                    |
+| `.subscribe(fn)`             | Subscribe to changes (for effects)                                      |
+| `.rename(oldKey, newKey)`    | Rename a key in an object                                               |
+| `.keys()`                    | Get the readonly state of keys of an object                             |
+| `.notify()`                  | Manually trigger subscribers                                            |
+| `.useCompute(fn)`            | Derive a computed value                                                 |
+| `.derived({ from, to })`     | Create bidirectional transform                                          |
+| `.ensureArray()`             | Ensure the value is an array                                            |
+| `.ensureObject()`            | Ensure the value is an object                                           |
+| `.withDefault(defaultValue)` | Return a new state with a default value, and make the type non-nullable |
+| `.Render({ children })`      | Render prop component                                                   |
+| `.Show({ children, on })`    | Conditional render component                                            |
 
 ## License
 
