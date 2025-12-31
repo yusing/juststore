@@ -41,6 +41,35 @@ function getKeyOrder(target: Record<string | symbol, unknown>): string[] | undef
   return target[keyOrderSymbol] as string[] | undefined
 }
 
+function isArrayIndexKey(key: string) {
+  if (key === '') return false
+  const n = Number(key)
+  if (!Number.isInteger(n)) return false
+  if (n < 0 || n > 2 ** 32 - 2) return false
+  return String(n) === key
+}
+
+function deriveKeyOrder(target: Record<string, unknown>) {
+  const keys = Object.keys(target)
+  if (keys.length === 0) return keys
+
+  const intKeys: string[] = []
+  const otherKeys: string[] = []
+
+  for (const key of keys) {
+    if (isArrayIndexKey(key)) {
+      intKeys.push(key)
+      continue
+    }
+    otherKeys.push(key)
+  }
+
+  if (intKeys.length > 0 && otherKeys.length > 0) {
+    return [otherKeys[0], ...intKeys, ...otherKeys.slice(1)]
+  }
+  return keys
+}
+
 function getOrderedKeysProxy<T extends Record<string, unknown>>(target: T): T {
   const cached = orderedProxyCache.get(target)
   if (cached) return cached as T
@@ -579,8 +608,12 @@ function getSnapshot(key: string) {
     return virtualRevisions.get(key) ?? 0
   }
   const value = store.get(key)
-  if (isRecord(value) && getKeyOrder(value as Record<string | symbol, unknown>)) {
-    return getOrderedKeysProxy(value as Record<string, unknown>)
+  if (isRecord(value)) {
+    const v = value as Record<string, unknown>
+    if (!getKeyOrder(v)) {
+      setKeyOrder(v, deriveKeyOrder(v))
+    }
+    return getOrderedKeysProxy(v)
   }
   return value
 }
@@ -666,7 +699,7 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
   store.set(key, value, memoryOnly)
   if (isRecord(value)) {
     const v = value as Record<string | symbol, unknown>
-    setKeyOrder(v, getKeyOrder(v) ?? Object.keys(v))
+    setKeyOrder(v, getKeyOrder(v) ?? deriveKeyOrder(v as Record<string, unknown>))
   }
 
   if (skipUpdate) return
@@ -703,14 +736,21 @@ function rename(path: string, oldKey: string, newKey: string) {
   const newChildKey = joinChildKey(path, newKey)
   rekeyListenerSubtree(oldChildKey, newChildKey)
 
-  // maintain order of entries
-  const newEntries = Object.entries(current)
+  // maintain order of entries (do NOT rely on Object.entries ordering since integer-like keys get reordered)
+  const obj = current as Record<string, unknown>
+  const keyOrder = getKeyOrder(obj) ?? Object.keys(obj)
+  const keyOrderSet = new Set(keyOrder)
+  const newEntries: [string, unknown][] = []
 
-  for (let index = 0; index < newEntries.length; index++) {
-    const [key, value] = newEntries[index]
-    if (key === oldKey) {
-      newEntries[index] = [newKey, value]
-    }
+  for (const key of keyOrder) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
+    newEntries.push([key === oldKey ? newKey : key, obj[key]])
+  }
+
+  // If the stored key order is stale, append missing keys at the end.
+  for (const key of Object.keys(obj)) {
+    if (keyOrderSet.has(key)) continue
+    newEntries.push([key === oldKey ? newKey : key, obj[key]])
   }
 
   const newObject = Object.fromEntries(newEntries)
