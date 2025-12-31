@@ -329,59 +329,6 @@ function joinChildKey(parent: string, child: string): string {
   return parent ? `${parent}.${child}` : child
 }
 
-function removeDescendantIndex(prefixes: string[], key: string) {
-  for (const prefix of prefixes) {
-    const prefixKeys = descendantListenerKeysByPrefix.get(prefix)
-    if (!prefixKeys) continue
-    prefixKeys.delete(key)
-    if (prefixKeys.size === 0) {
-      descendantListenerKeysByPrefix.delete(prefix)
-    }
-  }
-}
-
-function addDescendantIndex(prefixes: string[], key: string) {
-  for (const prefix of prefixes) {
-    let set = descendantListenerKeysByPrefix.get(prefix)
-    if (!set) {
-      set = new Set()
-      descendantListenerKeysByPrefix.set(prefix, set)
-    }
-    set.add(key)
-  }
-}
-
-function rekeyListenerKey(oldFullKey: string, newFullKey: string) {
-  if (oldFullKey === newFullKey) return
-
-  const oldSet = listeners.get(oldFullKey)
-  if (oldSet) {
-    let nextSet = listeners.get(newFullKey)
-    if (!nextSet) {
-      nextSet = new Set()
-      listeners.set(newFullKey, nextSet)
-    }
-    for (const cb of oldSet) nextSet.add(cb)
-    listeners.delete(oldFullKey)
-  }
-
-  const oldPrefixes = getKeyPrefixes(oldFullKey)
-  const newPrefixes = getKeyPrefixes(newFullKey)
-  removeDescendantIndex(oldPrefixes, oldFullKey)
-  addDescendantIndex(newPrefixes, newFullKey)
-}
-
-function rekeyListenerSubtree(oldPrefix: string, newPrefix: string) {
-  if (oldPrefix === newPrefix) return
-  const keys = Array.from(listeners.keys())
-  for (const k of keys) {
-    if (k === oldPrefix || k.startsWith(oldPrefix + '.')) {
-      const nextKey = newPrefix + k.slice(oldPrefix.length)
-      rekeyListenerKey(k, nextKey)
-    }
-  }
-}
-
 /**
  * Notifies all relevant listeners when a value changes.
  *
@@ -731,10 +678,6 @@ function rename(path: string, oldKey: string, newKey: string) {
     notifyListeners(path, current, next)
     return
   }
-
-  const oldChildKey = joinChildKey(path, oldKey)
-  const newChildKey = joinChildKey(path, newKey)
-  rekeyListenerSubtree(oldChildKey, newChildKey)
 
   // maintain order of entries (do NOT rely on Object.entries ordering since integer-like keys get reordered)
   const obj = current as Record<string, unknown>
