@@ -6,12 +6,14 @@ import type { FieldPath, FieldPathValue, FieldValues } from './path'
 export {
   getNestedValue,
   getSnapshot,
+  getStableKeys,
   isClass,
   isEqual,
   joinPath,
   notifyListeners,
   produce,
   rename,
+  setExternalKeyOrder,
   setLeaf,
   subscribe,
   useDebounce,
@@ -23,92 +25,40 @@ const memoryStore = new Map<string, unknown>()
 const listeners = new Map<string, Set<() => void>>()
 const descendantListenerKeysByPrefix = new Map<string, Set<string>>()
 const virtualRevisions = new Map<string, number>()
-const keyOrderSymbol = Symbol.for('juststore.key_order')
-const orderedProxyCache = new WeakMap<object, object>()
+const externalKeyOrder = new WeakMap<object, string[]>()
 
 function isVirtualKey(key: string) {
   return key.endsWith('.__juststore_keys') || key === '__juststore_keys'
 }
 
-function setKeyOrder(target: object, keys: string[]) {
-  Object.defineProperty(target, keyOrderSymbol, {
-    value: keys,
-    configurable: true
-  })
+function setExternalKeyOrder(target: object, keys: string[]) {
+  externalKeyOrder.set(target, keys)
 }
 
-function getKeyOrder(target: Record<string | symbol, unknown>): string[] | undefined {
-  return target[keyOrderSymbol] as string[] | undefined
+function hasOwn(target: object, key: string) {
+  return Object.prototype.hasOwnProperty.call(target, key)
 }
 
-function isArrayIndexKey(key: string) {
-  if (key === '') return false
-  const n = Number(key)
-  if (!Number.isInteger(n)) return false
-  if (n < 0 || n > 2 ** 32 - 2) return false
-  return String(n) === key
-}
+function getStableKeys(value: unknown): string[] {
+  if (!isRecord(value)) return []
+  const target = value as Record<string, unknown>
+  const existing = externalKeyOrder.get(target as unknown as object)
+  if (existing) {
+    const next = existing.filter(k => hasOwn(target, k))
+    const nextSet = new Set(next)
+    for (const k of Object.keys(target)) {
+      if (nextSet.has(k)) continue
+      next.push(k)
+    }
+    if (next.length !== existing.length) {
+      setExternalKeyOrder(target, next)
+    }
+    return next
+  }
 
-function deriveKeyOrder(target: Record<string, unknown>) {
   const keys = Object.keys(target)
-  if (keys.length === 0) return keys
-
-  const intKeys: string[] = []
-  const otherKeys: string[] = []
-
-  for (const key of keys) {
-    if (isArrayIndexKey(key)) {
-      intKeys.push(key)
-      continue
-    }
-    otherKeys.push(key)
-  }
-
-  if (intKeys.length > 0 && otherKeys.length > 0) {
-    return [otherKeys[0], ...intKeys, ...otherKeys.slice(1)]
-  }
+  setExternalKeyOrder(target, keys)
   return keys
-}
-
-function getOrderedKeysProxy<T extends Record<string, unknown>>(target: T): T {
-  const cached = orderedProxyCache.get(target)
-  if (cached) return cached as T
-
-  const proxy = new Proxy(target, {
-    ownKeys(t) {
-      const all = Reflect.ownKeys(t)
-      const desired = getKeyOrder(t)
-      if (!desired) return all
-
-      const desiredSet = new Set(desired)
-      const ordered: (string | symbol)[] = []
-      for (const k of desired) {
-        if (Object.prototype.hasOwnProperty.call(t, k)) ordered.push(k)
-      }
-
-      for (const k of all) {
-        if (typeof k === 'string') {
-          if (desiredSet.has(k)) continue
-          ordered.push(k)
-          continue
-        }
-        ordered.push(k)
-      }
-      return ordered
-    },
-    getOwnPropertyDescriptor(t, prop) {
-      return Reflect.getOwnPropertyDescriptor(t, prop)
-    },
-    get(t, prop, receiver) {
-      return Reflect.get(t, prop, receiver)
-    },
-    has(t, prop) {
-      return Reflect.has(t, prop)
-    }
-  })
-
-  orderedProxyCache.set(target, proxy as object)
-  return proxy
 }
 
 // check if the value is a class instance
@@ -214,7 +164,13 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
       ? {}
       : Array.isArray(obj)
         ? [...obj]
-        : { ...(obj as Record<string, unknown>) }
+        : (() => {
+            const existing = obj as Record<string, unknown>
+            const next = { ...existing }
+            const order = externalKeyOrder.get(existing)
+            if (order) setExternalKeyOrder(next, order)
+            return next
+          })()
 
   let current: Record<string, unknown> | unknown[] = result
 
@@ -251,7 +207,10 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
       } else if (Array.isArray(existing)) {
         next = [...existing]
       } else {
-        next = { ...(existing as Record<string, unknown>) }
+        const existingObj = existing as Record<string, unknown>
+        next = { ...existingObj }
+        const order = externalKeyOrder.get(existingObj)
+        if (order) setExternalKeyOrder(next, order)
       }
       currentObj[segment] = next
       current = next
@@ -270,10 +229,23 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
     }
   } else if (typeof current === 'object' && current !== null) {
     const currentObj = current as Record<string, unknown>
+    const hadKey = hasOwn(currentObj, lastSegment)
     if (value === undefined) {
       delete currentObj[lastSegment]
+      if (hadKey) {
+        const order = externalKeyOrder.get(currentObj)
+        if (order)
+          setExternalKeyOrder(
+            currentObj,
+            order.filter(k => k !== lastSegment)
+          )
+      }
     } else {
       currentObj[lastSegment] = value
+      if (!hadKey) {
+        const order = externalKeyOrder.get(currentObj)
+        if (order) setExternalKeyOrder(currentObj, [...order, lastSegment])
+      }
     }
   }
 
@@ -413,7 +385,7 @@ function notifyListeners(
 
           const getKeys = (root: unknown) => {
             const obj = objectPath ? getNestedValue(root, objectPath) : root
-            return obj && typeof obj === 'object' && !Array.isArray(obj) ? Object.keys(obj) : []
+            return getStableKeys(obj)
           }
 
           const oldKeys = getKeys(oldValue)
@@ -554,15 +526,7 @@ function getSnapshot(key: string) {
   if (isVirtualKey(key)) {
     return virtualRevisions.get(key) ?? 0
   }
-  const value = store.get(key)
-  if (isRecord(value)) {
-    const v = value as Record<string, unknown>
-    if (!getKeyOrder(v)) {
-      setKeyOrder(v, deriveKeyOrder(v))
-    }
-    return getOrderedKeysProxy(v)
-  }
-  return value
+  return store.get(key)
 }
 
 // Cross-tab synchronization: keep memoryStore in sync with BroadcastChannel events
@@ -644,10 +608,6 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
 
   if (isEqual(current, value)) return
   store.set(key, value, memoryOnly)
-  if (isRecord(value)) {
-    const v = value as Record<string | symbol, unknown>
-    setKeyOrder(v, getKeyOrder(v) ?? deriveKeyOrder(v as Record<string, unknown>))
-  }
 
   if (skipUpdate) return
 
@@ -674,31 +634,30 @@ function rename(path: string, oldKey: string, newKey: string) {
     // assign a new object with the new key
     const next = { [newKey]: undefined }
     store.set(path, next)
-    setKeyOrder(next, [newKey])
+    setExternalKeyOrder(next, [newKey])
     notifyListeners(path, current, next)
     return
   }
 
-  // maintain order of entries (do NOT rely on Object.entries ordering since integer-like keys get reordered)
   const obj = current as Record<string, unknown>
-  const keyOrder = getKeyOrder(obj) ?? Object.keys(obj)
-  const keyOrderSet = new Set(keyOrder)
-  const newEntries: [string, unknown][] = []
+  if (oldKey === newKey) return
+  if (!hasOwn(obj, oldKey)) return
+
+  const keyOrder = getStableKeys(obj)
+  const entries: [string, unknown][] = []
 
   for (const key of keyOrder) {
-    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
-    newEntries.push([key === oldKey ? newKey : key, obj[key]])
+    if (!hasOwn(obj, key)) continue
+    if (key === oldKey) {
+      entries.push([newKey, obj[oldKey]])
+      continue
+    }
+    entries.push([key, obj[key]])
   }
 
-  // If the stored key order is stale, append missing keys at the end.
-  for (const key of Object.keys(obj)) {
-    if (keyOrderSet.has(key)) continue
-    newEntries.push([key === oldKey ? newKey : key, obj[key]])
-  }
-
-  const newObject = Object.fromEntries(newEntries)
+  const newObject = Object.fromEntries(entries)
   store.set(path, newObject)
-  setKeyOrder(newObject, Array.from(new Set(newEntries.map(([k]) => k))))
+  setExternalKeyOrder(newObject, Array.from(new Set(entries.map(([k]) => k))))
   notifyListeners(path, current, newObject)
 }
 

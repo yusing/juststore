@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { getStableKeys } from './impl'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
 import type { DerivedStateProps, ReadOnlyState, State, StoreRoot } from './types'
 
@@ -353,7 +354,7 @@ function createKeysNode(
 ): ReadOnlyState<string[]> {
   const signalPath = path ? `${path}.__juststore_keys` : '__juststore_keys'
   const computeKeys = () => {
-    return Object.keys(getObjectValue(storeApi.value(path)))
+    return getStableKeys(getObjectValue(storeApi.value(path)))
   }
 
   return new Proxy(
@@ -394,7 +395,7 @@ function ensureArray(value: any, from: (value: any) => any) {
 function ensureObject(value: any, from: (value: any) => any) {
   if (value === undefined || value === null) return EMPTY_OBJECT
   const obj = from(value)
-  if (typeof obj === 'object') return obj
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) return obj
   return EMPTY_OBJECT
 }
 

@@ -55,7 +55,7 @@ type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<T> & {
 type ObjectProxy<T extends FieldValues> = {
   /** Virtual state for the object's keys.
    *
-   * This does NOT read from a real `keys` property on the stored object; it derives from `Object.keys(value)`.
+   * This does NOT read from a real `keys` property on the stored object; it results in a stable array of keys.
    */
   readonly keys: ReadOnlyState<FieldPath<T>[]>
 } & {
