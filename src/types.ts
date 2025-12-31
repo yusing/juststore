@@ -105,7 +105,11 @@ type StoreRoot<T extends FieldValues> = {
     listener: (value: FieldPathValue<T, P>) => void
   ) => void
   /** Compute a derived value from the current value, similar to useState + useMemo */
-  useCompute: <P extends FieldPath<T>, R>(path: P, fn: (value: FieldPathValue<T, P>) => R) => R
+  useCompute: <P extends FieldPath<T>, R>(
+    path: P,
+    fn: (value: FieldPathValue<T, P>) => R,
+    deps?: readonly unknown[]
+  ) => R
   /** Notify listeners at path. */
   notify: <P extends FieldPath<T>>(path: P) => void
 
@@ -138,7 +142,7 @@ type ValueState<T> = {
   /** Subscribe to changes at path and invoke listener with the new value. */
   subscribe(listener: (value: T) => void): void
   /** Compute a derived value from the current value, similar to useState + useMemo */
-  useCompute: <R>(fn: (value: T) => R) => R
+  useCompute: <R>(fn: (value: T) => R, deps?: readonly unknown[]) => R
   /** Ensure the value is an array. */
   ensureArray(): NonNullable<T> extends (infer U)[] ? ArrayState<U> : never
   /** Ensure the value is an object. */
