@@ -62,257 +62,306 @@ function createNode<T extends FieldValues>(
   if (!isDerived && cache.has(path)) {
     return cache.get(path)
   }
-  const proxy = new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (prop === 'field') {
-          return fieldName
+  const proxy = new Proxy({} as Record<string | symbol, any>, {
+    get(_target, prop) {
+      if (prop === 'field') {
+        return fieldName
+      }
+      if (prop === 'use') {
+        return (_target._use ??= () => from(storeApi.use(path)))
+      }
+      if (prop === 'useDebounce') {
+        return (_target._useDebounce ??= (delay: number) => from(storeApi.useDebounce(path, delay)))
+      }
+      if (prop === 'useState') {
+        return (_target._useState ??= () => {
+          const value = storeApi.use(path)
+          return [from(value), (next: any) => storeApi.set(path, to(next))]
+        })
+      }
+      if (prop === 'value') {
+        return from(storeApi.value(path))
+      }
+      if (prop === 'set') {
+        return (_target._set ??= (value: any, skipUpdate?: boolean) =>
+          storeApi.set(path, to(value), skipUpdate))
+      }
+      if (prop === 'reset') {
+        return (_target._reset ??= () => storeApi.reset(path))
+      }
+      if (prop === 'subscribe') {
+        return (_target._subscribe ??= (listener: (v: any) => void) =>
+          storeApi.subscribe(path, value => listener(to(value))))
+      }
+      if (prop === 'Render') {
+        return (_target._Render ??= ({
+          children
+        }: {
+          children: (value: any, update: (value: any) => void) => React.ReactNode
+        }) =>
+          storeApi.Render({
+            path,
+            children: (value, update) => children(from(value), value => update(to(value)))
+          }))
+      }
+      if (prop === 'Show') {
+        return (_target._Show ??= ({
+          children,
+          on
+        }: {
+          children: React.ReactNode
+          on: (value: any) => boolean
+        }) => storeApi.Show({ path, children, on: value => on(from(value)) }))
+      }
+      if (prop === 'useCompute') {
+        return (_target._useCompute ??= <R>(fn: (value: any) => R) => {
+          return storeApi.useCompute(path, value => fn(from(value)))
+        })
+      }
+      if (prop === 'derived') {
+        if (isDerived) {
+          throw new Error(`Derived method cannot be called on a derived node: ${path}`)
         }
-        if (prop === 'use') {
-          return () => from(storeApi.use(path))
-        }
-        if (prop === 'useDebounce') {
-          return (delay: number) => from(storeApi.useDebounce(path, delay))
-        }
-        if (prop === 'useState') {
-          return () => {
-            const value = storeApi.use(path)
-            return [from(value), (next: any) => storeApi.set(path, to(next))]
+        return (_target._derived ??= ({ from, to }: DerivedStateProps<any, any>) =>
+          createNode(storeApi, path, cache, extensions, from, to))
+      }
+      if (prop === 'notify') {
+        return (_target._notify ??= () => storeApi.notify(path))
+      }
+      if (prop === 'ensureArray') {
+        return (_target._ensureArray ??= () => {
+          const cacheKey = `${path}.__juststore_ensureArray`
+          if (!isDerived && cache.has(cacheKey)) {
+            return cache.get(cacheKey)
           }
-        }
-        if (prop === 'value') {
-          return from(storeApi.value(path))
-        }
-        if (prop === 'set') {
-          return (value: any, skipUpdate?: boolean) => storeApi.set(path, to(value), skipUpdate)
-        }
-        if (prop === 'reset') {
-          return () => storeApi.reset(path)
-        }
-        if (prop === 'subscribe') {
-          return (listener: (v: any) => void) =>
-            storeApi.subscribe(path, value => listener(to(value)))
-        }
-        if (prop === 'Render') {
-          return ({
-            children
-          }: {
-            children: (value: any, update: (value: any) => void) => React.ReactNode
-          }) =>
-            storeApi.Render({
-              path,
-              children: (value, update) => children(from(value), value => update(to(value)))
-            })
-        }
-        if (prop === 'Show') {
-          return ({ children, on }: { children: React.ReactNode; on: (value: any) => boolean }) =>
-            storeApi.Show({ path, children, on: value => on(from(value)) })
-        }
-        if (prop === 'useCompute') {
-          return <R>(fn: (value: any) => R) => {
-            return storeApi.useCompute(path, value => fn(from(value)))
+          const node = createNode(
+            storeApi,
+            path,
+            cache,
+            extensions,
+            value => ensureArray(value, from),
+            unchanged
+          )
+          if (!isDerived) {
+            cache.set(cacheKey, node)
           }
-        }
-        if (prop === 'derived') {
-          if (isDerived) {
-            throw new Error(`Derived method cannot be called on a derived node: ${path}`)
+          return node
+        })
+      }
+      if (prop === 'ensureObject') {
+        return (_target._ensureObject ??= () => {
+          const cacheKey = `${path}.__juststore_ensureObject`
+          if (!isDerived && cache.has(cacheKey)) {
+            return cache.get(cacheKey)
           }
-          return ({ from, to }: DerivedStateProps<any, any>) =>
-            createNode(storeApi, path, cache, extensions, from, to)
-        }
-        if (prop === 'notify') {
-          return () => storeApi.notify(path)
-        }
-        if (prop === 'ensureArray') {
-          return () =>
-            createNode(
-              storeApi,
-              path,
-              cache,
-              extensions,
-              value => ensureArray(value, from),
-              unchanged
-            )
-        }
-        if (prop === 'ensureObject') {
-          return () =>
-            createNode(storeApi, path, cache, extensions, value => ensureObject(value, from), to)
-        }
-        if (prop === 'withDefault') {
-          return (defaultValue: T) =>
-            createNode(
-              storeApi,
-              path,
-              cache,
-              extensions,
-              value => withDefault(value, defaultValue, from),
-              to
-            )
+          const node = createNode(
+            storeApi,
+            path,
+            cache,
+            extensions,
+            value => ensureObject(value, from),
+            to
+          )
+          if (!isDerived) {
+            cache.set(cacheKey, node)
+          }
+          return node
+        })
+      }
+      if (prop === 'withDefault') {
+        return (_target._withDefault ??= (defaultValue: T) =>
+          createNode(
+            storeApi,
+            path,
+            cache,
+            extensions,
+            value => withDefault(value, defaultValue, from),
+            to
+          ))
+      }
+
+      if (isObjectMethod(prop)) {
+        const derivedValue = from(storeApi.value(path))
+        if (derivedValue !== undefined && typeof derivedValue !== 'object') {
+          throw new Error(`Expected object at path ${path}, got ${typeof derivedValue}`)
         }
 
-        if (isObjectMethod(prop)) {
-          const derivedValue = from(storeApi.value(path))
-          if (derivedValue !== undefined && typeof derivedValue !== 'object') {
-            throw new Error(`Expected object at path ${path}, got ${typeof derivedValue}`)
+        if (prop === 'rename') {
+          return (_target._rename ??= (oldKey: string, newKey: string) =>
+            storeApi.rename(path, oldKey, newKey))
+        }
+        if (prop === 'keys') {
+          const cacheKey = `${path}.__juststore_keys`
+          if (!isDerived && cache.has(cacheKey)) {
+            return cache.get(cacheKey)
           }
+          const keysNode = createKeysNode(storeApi, path, value => ensureObject(value, from))
+          if (!isDerived) {
+            cache.set(cacheKey, keysNode)
+          }
+          return keysNode
+        }
+      }
 
-          if (prop === 'rename') {
-            return (oldKey: string, newKey: string) => storeApi.rename(path, oldKey, newKey)
-          }
-          if (prop === 'keys') {
-            const cacheKey = `${path}.__juststore_keys`
-            if (!isDerived && cache.has(cacheKey)) {
-              return cache.get(cacheKey)
-            }
-            const keysNode = createKeysNode(storeApi, path, value => ensureObject(value, from))
-            if (!isDerived) {
-              cache.set(cacheKey, keysNode)
-            }
-            return keysNode
-          }
+      if (isArrayMethod(prop)) {
+        const derivedValue = from(storeApi.value(path))
+
+        if (derivedValue !== undefined && !Array.isArray(derivedValue)) {
+          throw new Error(`Expected array at path ${path}, got ${typeof derivedValue}`)
         }
 
-        if (isArrayMethod(prop)) {
-          const derivedValue = from(storeApi.value(path))
+        const currentArray = derivedValue ? [...derivedValue] : []
+        if (prop === 'at') {
+          return (_target._at ??= (index: number) => {
+            const nextPath = path ? `${path}.${index}` : String(index)
+            return createNode(storeApi, nextPath, cache, extensions)
+          })
+        }
+        if (prop === 'length') {
+          return currentArray.length
+        }
 
-          if (derivedValue !== undefined && !Array.isArray(derivedValue)) {
-            throw new Error(`Expected array at path ${path}, got ${typeof derivedValue}`)
-          }
+        // Array mutation methods
+        if (prop === 'push') {
+          return (_target._push ??= (...items: any[]) => {
+            // We need to fetch the current array at call time, not bind time
+            const arr = from(storeApi.value(path)) ?? []
+            const newArray = [...arr, ...items]
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return newArray.length
+          })
+        }
+        if (prop === 'pop') {
+          return (_target._pop ??= () => {
+            const arr = from(storeApi.value(path)) ?? []
+            if (arr.length === 0) return undefined
+            const newArray = arr.slice(0, -1)
+            const poppedItem = arr[arr.length - 1]
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return poppedItem
+          })
+        }
+        if (prop === 'shift') {
+          return (_target._shift ??= () => {
+            const arr = from(storeApi.value(path)) ?? []
+            if (arr.length === 0) return undefined
+            const newArray = arr.slice(1)
+            const shiftedItem = arr[0]
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return shiftedItem
+          })
+        }
+        if (prop === 'unshift') {
+          return (_target._unshift ??= (...items: any[]) => {
+            const arr = from(storeApi.value(path)) ?? []
+            const newArray = [...items, ...arr]
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return newArray.length
+          })
+        }
+        if (prop === 'splice') {
+          return (_target._splice ??= (start: number, deleteCount?: number, ...items: any[]) => {
+            const arr = from(storeApi.value(path)) ?? []
+            const newArray = [...arr]
+            const deletedItems = newArray.splice(start, deleteCount ?? 0, ...items)
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return deletedItems
+          })
+        }
+        if (prop === 'reverse') {
+          return (_target._reverse ??= () => {
+            const arr = from(storeApi.value(path))
+            if (!Array.isArray(arr)) return []
+            const newArray = [...arr]
+            newArray.reverse()
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return newArray
+          })
+        }
+        if (prop === 'sort') {
+          return (_target._sort ??= (compareFn?: (a: any, b: any) => number) => {
+            const arr = from(storeApi.value(path))
+            if (!Array.isArray(arr)) return []
+            const newArray = [...arr]
+            newArray.sort(compareFn)
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return newArray
+          })
+        }
+        if (prop === 'fill') {
+          return (_target._fill ??= (value: any[], start?: number, end?: number) => {
+            const arr = from(storeApi.value(path))
+            if (!Array.isArray(arr)) return []
+            const newArray = [...arr]
+            newArray.fill(value, start, end)
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return newArray
+          })
+        }
+        if (prop === 'copyWithin') {
+          return (_target._copyWithin ??= (target: number, start: number, end?: number) => {
+            const arr = from(storeApi.value(path))
+            if (!Array.isArray(arr)) return []
+            const newArray = [...arr]
+            newArray.copyWithin(target, start, end)
+            storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
+            return newArray
+          })
+        }
+        if (prop === 'sortedInsert') {
+          return (_target._sortedInsert ??= (cmp: (a: any, b: any) => number, ...items: any[]) => {
+            const arr = from(storeApi.value(path))
+            if (!Array.isArray(arr)) return []
+            if (typeof cmp !== 'function') return arr.length
 
-          const currentArray = derivedValue ? [...derivedValue] : []
-          if (prop === 'at') {
-            return (index: number) => {
-              const nextPath = path ? `${path}.${index}` : String(index)
-              return createNode(storeApi, nextPath, cache, extensions)
-            }
-          }
-          if (prop === 'length') {
-            return currentArray.length
-          }
+            const newArray = [...arr]
 
-          // Array mutation methods
-          if (prop === 'push') {
-            return (...items: any[]) => {
-              const newArray = [...currentArray, ...items]
-              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
-              return newArray.length
-            }
-          }
-          if (prop === 'pop') {
-            return () => {
-              if (currentArray.length === 0) return undefined
-              const newArray = currentArray.slice(0, -1)
-              const poppedItem = currentArray[currentArray.length - 1]
-              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
-              return poppedItem
-            }
-          }
-          if (prop === 'shift') {
-            return () => {
-              if (currentArray.length === 0) return undefined
-              const newArray = currentArray.slice(1)
-              const shiftedItem = currentArray[0]
-              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
-              return shiftedItem
-            }
-          }
-          if (prop === 'unshift') {
-            return (...items: any[]) => {
-              const newArray = [...items, ...currentArray]
-              storeApi.set(path as any, isDerived ? newArray.map(to) : newArray)
-              return newArray.length
-            }
-          }
-          if (prop === 'splice') {
-            return (start: number, deleteCount?: number, ...items: any[]) => {
-              const deletedItems = currentArray.splice(start, deleteCount ?? 0, ...items)
-              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
-              return deletedItems
-            }
-          }
-          if (prop === 'reverse') {
-            return () => {
-              if (!Array.isArray(currentArray)) return []
-              currentArray.reverse()
-              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
-              return currentArray
-            }
-          }
-          if (prop === 'sort') {
-            return (compareFn?: (a: any, b: any) => number) => {
-              currentArray.sort(compareFn)
-              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
-              return currentArray
-            }
-          }
-          if (prop === 'fill') {
-            return (value: any[], start?: number, end?: number) => {
-              currentArray.fill(value, start, end)
-              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
-              return currentArray
-            }
-          }
-          if (prop === 'copyWithin') {
-            return (target: number, start: number, end?: number) => {
-              currentArray.copyWithin(target, start, end)
-              storeApi.set(path as any, isDerived ? currentArray.map(to) : currentArray)
-              return currentArray
-            }
-          }
-          if (prop === 'sortedInsert') {
-            return (cmp: (a: any, b: any) => number, ...items: any[]) => {
-              if (typeof cmp !== 'function') return currentArray.length
+            for (const item of items) {
+              let left = 0
+              let right = newArray.length
 
-              const newArray = [...currentArray]
-
-              for (const item of items) {
-                let left = 0
-                let right = newArray.length
-
-                // Binary search to find insertion point
-                while (left < right) {
-                  const mid = (left + right) >>> 1
-                  if (cmp(newArray[mid], item) <= 0) {
-                    left = mid + 1
-                  } else {
-                    right = mid
-                  }
+              // Binary search to find insertion point
+              while (left < right) {
+                const mid = (left + right) >>> 1
+                if (cmp(newArray[mid], item) <= 0) {
+                  left = mid + 1
+                } else {
+                  right = mid
                 }
-
-                // Insert at the found position
-                newArray.splice(left, 0, item)
               }
 
-              storeApi.set(path, isDerived ? newArray.map(to) : newArray)
-              return newArray.length
+              // Insert at the found position
+              newArray.splice(left, 0, item)
             }
-          }
-        }
 
-        if (extensions?.[prop]?.get) {
-          return extensions[prop]?.get()
+            storeApi.set(path, isDerived ? newArray.map(to) : newArray)
+            return newArray.length
+          })
         }
-
-        if (typeof prop === 'string' || typeof prop === 'number') {
-          const nextPath = path ? `${path}.${prop}` : String(prop)
-          return createNode(storeApi, nextPath, cache, extensions)
-        }
-        return undefined
-      },
-      set(_target, prop, value) {
-        if (extensions?.[prop]?.set) {
-          return extensions[prop]?.set(value)
-        }
-        if (typeof prop === 'string' || typeof prop === 'number') {
-          const nextPath = path ? `${path}.${prop}` : String(prop)
-          storeApi.set(nextPath, to(value))
-          return true
-        }
-        return false
       }
+
+      if (extensions?.[prop]?.get) {
+        return extensions[prop]?.get()
+      }
+
+      if (typeof prop === 'string' || typeof prop === 'number') {
+        const nextPath = path ? `${path}.${prop}` : String(prop)
+        return createNode(storeApi, nextPath, cache, extensions)
+      }
+      return undefined
+    },
+    set(_target, prop, value) {
+      if (extensions?.[prop]?.set) {
+        return extensions[prop]?.set(value)
+      }
+      if (typeof prop === 'string' || typeof prop === 'number') {
+        const nextPath = path ? `${path}.${prop}` : String(prop)
+        storeApi.set(nextPath, to(value))
+        return true
+      }
+      return false
     }
-  )
+  })
   if (!isDerived) {
     cache.set(path, proxy)
   }
@@ -357,32 +406,40 @@ function createKeysNode(
     return getStableKeys(getObjectValue(storeApi.value(path)))
   }
 
-  return new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (prop === 'use') return () => storeApi.useCompute(signalPath, computeKeys)
-        if (prop === 'value') return computeKeys()
-        if (prop === 'useCompute') {
-          return <R>(fn: (value: any) => R) => {
-            return storeApi.useCompute(signalPath, () => fn(computeKeys()))
-          }
-        }
-        if (prop === 'Render') {
-          return ({ children }: { children: (value: any, update: (value: any) => void) => any }) =>
-            children(storeApi.useCompute(signalPath, computeKeys), () => {})
-        }
-        if (prop === 'Show') {
-          return ({ children, on }: { children: any; on: (value: any) => boolean }) => {
-            const value = storeApi.useCompute(signalPath, computeKeys)
-            if (!on(value)) return null
-            return children
-          }
-        }
-        return undefined
+  return new Proxy({} as Record<string | symbol, any>, {
+    get(_target, prop) {
+      if (prop === 'use') {
+        return (_target._use ??= () => storeApi.useCompute(signalPath, computeKeys))
       }
+      if (prop === 'value') return computeKeys()
+      if (prop === 'useCompute') {
+        return (_target._useCompute ??= <R>(fn: (value: any) => R) => {
+          return storeApi.useCompute(signalPath, () => fn(computeKeys()))
+        })
+      }
+      if (prop === 'Render') {
+        return (_target._Render ??= ({
+          children
+        }: {
+          children: (value: any, update: (value: any) => void) => any
+        }) => children(storeApi.useCompute(signalPath, computeKeys), () => {}))
+      }
+      if (prop === 'Show') {
+        // eslint-disable-next-line react/display-name
+        return (_target._Show ??= ({
+          children,
+          on
+        }: {
+          children: any
+          on: (value: any) => boolean
+        }) => {
+          const show = storeApi.useCompute(signalPath, () => on(computeKeys()), [on])
+          return show ? children : null
+        })
+      }
+      return undefined
     }
-  ) as ReadOnlyState<string[]>
+  }) as ReadOnlyState<string[]>
 }
 
 function ensureArray(value: any, from: (value: any) => any) {
