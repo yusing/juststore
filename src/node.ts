@@ -220,6 +220,12 @@ function createNode<T extends FieldValues>(
         if (prop === 'length') {
           return currentArray.length
         }
+        if (prop === 'useLength') {
+          return storeApi.useCompute(path, value => {
+            const arr = from(value)
+            return Array.isArray(arr) ? arr.length : 0
+          })
+        }
 
         // Array mutation methods
         if (prop === 'push') {
@@ -372,6 +378,7 @@ function isArrayMethod(prop: string | symbol) {
   return (
     prop === 'at' ||
     prop === 'length' ||
+    prop === 'useLength' ||
     prop === 'push' ||
     prop === 'pop' ||
     prop === 'shift' ||

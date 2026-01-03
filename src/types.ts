@@ -42,6 +42,8 @@ type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<T> & {
    * current value is not an array at the path. Prefer `Array.isArray(x) && x.length` when unsure.
    */
   readonly length: number
+  /** Subscribe to array length changes without subscribing to individual element changes. */
+  useLength(): number
   /** Numeric index access never returns undefined at the type level because
    * the proxy always returns another proxy object, even if the underlying value doesn't exist.
    */
