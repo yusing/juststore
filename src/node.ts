@@ -221,10 +221,11 @@ function createNode<T extends FieldValues>(
           return currentArray.length
         }
         if (prop === 'useLength') {
-          return storeApi.useCompute(path, value => {
-            const arr = from(value)
-            return Array.isArray(arr) ? arr.length : 0
-          })
+          return (_target._useLength ??= () =>
+            storeApi.useCompute(path, value => {
+              const arr = from(value)
+              return Array.isArray(arr) ? arr.length : 0
+            }))
         }
 
         // Array mutation methods
