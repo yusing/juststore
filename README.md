@@ -472,28 +472,60 @@ The store root provides path-based methods for dynamic access:
 | `.Render({ path, children })`   | Render prop component                                   |
 | `.Show({ path, children, on })` | Conditional render component                            |
 
-### State Methods
+### Common State Methods
 
-| Method                       | Description                                                             |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| `.use()`                     | Subscribe and read value (triggers re-render on change)                 |
-| `.useDebounce(ms)`           | Subscribe with debounced updates                                        |
-| `.useState()`                | Returns `[value, setValue]` tuple                                       |
-| `.value`                     | Read without subscribing                                                |
-| `.set(value)`                | Update value                                                            |
-| `.set(fn)`                   | Functional update                                                       |
-| `.reset()`                   | Delete value at path                                                    |
-| `.subscribe(fn)`             | Subscribe to changes (for effects)                                      |
-| `.rename(oldKey, newKey)`    | Rename a key in an object                                               |
-| `.keys()`                    | Get the readonly state of keys of an object                             |
-| `.notify()`                  | Manually trigger subscribers                                            |
-| `.useCompute(fn)`            | Derive a computed value                                                 |
-| `.derived({ from, to })`     | Create bidirectional transform                                          |
-| `.ensureArray()`             | Ensure the value is an array                                            |
-| `.ensureObject()`            | Ensure the value is an object                                           |
+Available on all state types (values, objects, arrays):
+
+| Method                       | Description                                                         |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `.value`                     | Read without subscribing                                            |
+| `.field`                     | The field name for the proxy                                        |
+| `.use()`                     | Subscribe and read value (triggers re-render on change)             |
+| `.useDebounce(ms)`           | Subscribe with debounced updates                                    |
+| `.useState()`                | Returns `[value, setValue]` tuple                                   |
+| `.set(value)`                | Update value                                                        |
+| `.set(fn)`                   | Functional update                                                   |
+| `.reset()`                   | Delete value at path                                                |
+| `.subscribe(fn)`             | Subscribe to changes (for effects)                                  |
+| `.notify()`                  | Manually trigger subscribers                                        |
+| `.useCompute(fn)`            | Derive a computed value                                             |
+| `.derived({ from, to })`     | Create bidirectional transform                                      |
+| `.ensureArray()`             | Get array state for the value                                       |
+| `.ensureObject()`            | Get object state for the value                                      |
 | `.withDefault(defaultValue)` | Return a new state with a default value, and make the type non-nullable |
-| `.Render({ children })`      | Render prop component                                                   |
-| `.Show({ children, on })`    | Conditional render component                                            |
+| `.Render({ children })`      | Render prop component                                               |
+| `.Show({ children, on })`    | Conditional render component                                        |
+
+### Object State Methods
+
+Additional methods available on object states:
+
+| Method                    | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `.keys`                   | Readonly state of object keys                         |
+| `.rename(oldKey, newKey)` | Rename a key in an object                             |
+| `[key: string]`           | Access nested property state by key                   |
+
+### Array State Methods
+
+Additional methods available on array states:
+
+| Method                   | Description                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `.length`                | Read the array length without subscribing                                         |
+| `.useLength()`           | Subscribe to array length changes                                                 |
+| `.push(...items)`        | Add items to the end                                                              |
+| `.pop()`                 | Remove and return the last item                                                   |
+| `.shift()`               | Remove and return the first item                                                  |
+| `.unshift(...items)`     | Add items to the beginning                                                        |
+| `.splice(start, deleteCount, ...items)` | Remove/replace items                                      |
+| `.reverse()`             | Reverse the array in place                                                        |
+| `.sort(compareFn)`       | Sort the array in place                                                           |
+| `.fill(value, start, end)` | Fill the array with a value                                                    |
+| `.copyWithin(target, start, end)` | Copy part of the array within itself                                 |
+| `.sortedInsert(cmp, ...items)` | Insert items in sorted order using comparison function                      |
+| `.at(index)`             | Access element at index (returns proxy)                                           |
+| `[index: number]`        | Access element at index (returns proxy)                                           |
 
 ## License
 
