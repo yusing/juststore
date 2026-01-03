@@ -204,6 +204,14 @@ function createNode<T extends FieldValues>(
       }
 
       if (isArrayMethod(prop)) {
+        if (prop === 'useLength') {
+          return (_target._useLength ??= () =>
+            storeApi.useCompute(path, value => {
+              const arr = from(value)
+              return Array.isArray(arr) ? arr.length : 0
+            }))
+        }
+
         const derivedValue = from(storeApi.value(path))
 
         if (derivedValue !== undefined && !Array.isArray(derivedValue)) {
@@ -219,13 +227,6 @@ function createNode<T extends FieldValues>(
         }
         if (prop === 'length') {
           return currentArray.length
-        }
-        if (prop === 'useLength') {
-          return (_target._useLength ??= () =>
-            storeApi.useCompute(path, value => {
-              const arr = from(value)
-              return Array.isArray(arr) ? arr.length : 0
-            }))
         }
 
         // Array mutation methods
