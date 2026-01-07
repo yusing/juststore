@@ -1,6 +1,6 @@
 export type * from './form'
 export { useForm } from './form'
-export { useMemoryStore, type MemoryStore } from './memory'
+export { createMemoryStore, useMemoryStore, type MemoryStore } from './memory'
 export { createMixedState } from './mixed_state'
 export type * from './path'
 export { createStore, type Store } from './store'

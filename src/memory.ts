@@ -4,7 +4,7 @@ import type { FieldValues } from './path'
 import { createStoreRoot } from './root'
 import type { State, ValueState } from './types'
 
-export { useMemoryStore, type MemoryStore }
+export { createMemoryStore, useMemoryStore, type MemoryStore }
 
 /**
  * A component local store with React bindings.
@@ -62,5 +62,15 @@ function useMemoryStore<T extends FieldValues>(defaultValue: T): MemoryStore<T> 
     memoryOnly: true
   })
 
+  return createRootNode(storeApi) as unknown as MemoryStore<T>
+}
+
+function createMemoryStore<T extends FieldValues>(
+  namespace: string,
+  defaultValue: T
+): MemoryStore<T> {
+  const storeApi = createStoreRoot(namespace, defaultValue, {
+    memoryOnly: true
+  })
   return createRootNode(storeApi) as unknown as MemoryStore<T>
 }
