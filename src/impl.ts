@@ -123,13 +123,21 @@ function getNestedValue(obj: unknown, path: string): unknown {
   const segments = path.split('.')
   let current = obj
 
+  // Array indices must be explicit non-negative integers.
+  // IMPORTANT: treat empty string ("") as a *key*, not index 0.
+  // (Number('') === 0 would otherwise turn paths like `foo.bar.` into `foo.bar.0`.)
+  const parseArrayIndex = (segment: string) => {
+    if (!/^(0|[1-9]\d*)$/.test(segment)) return null
+    return Number(segment)
+  }
+
   for (const segment of segments) {
     if (current === null || current === undefined) return undefined
     if (typeof current !== 'object') return undefined
 
     if (Array.isArray(current)) {
-      const index = Number(segment)
-      if (Number.isNaN(index)) return undefined
+      const index = parseArrayIndex(segment)
+      if (index === null) return undefined
       current = current[index]
     } else {
       current = (current as Record<string, unknown>)[segment]
@@ -159,6 +167,13 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
     return obj
   }
 
+  // Array indices must be explicit non-negative integers.
+  // IMPORTANT: treat empty string ("") as a *key*, not index 0.
+  const parseArrayIndex = (segment: string) => {
+    if (!/^(0|[1-9]\d*)$/.test(segment)) return null
+    return Number(segment)
+  }
+
   const result: Record<string, unknown> | unknown[] =
     obj === null || obj === undefined
       ? {}
@@ -177,11 +192,11 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
   for (let i = 0; i < segments.length - 1; i++) {
     const segment = segments[i]!
     const nextSegment = segments[i + 1]!
-    const isNextIndex = !Number.isNaN(Number(nextSegment))
+    const isNextIndex = parseArrayIndex(nextSegment) !== null
 
     if (Array.isArray(current)) {
-      const index = Number(segment)
-      if (Number.isNaN(index)) break
+      const index = parseArrayIndex(segment)
+      if (index === null) break
 
       const existing = current[index]
       let next: Record<string, unknown> | unknown[]
@@ -219,8 +234,8 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
 
   const lastSegment = segments[segments.length - 1]!
   if (Array.isArray(current)) {
-    const index = Number(lastSegment)
-    if (!Number.isNaN(index)) {
+    const index = parseArrayIndex(lastSegment)
+    if (index !== null) {
       if (value === undefined) {
         current.splice(index, 1)
       } else {
