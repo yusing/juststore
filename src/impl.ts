@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import rfcIsEqual from 'react-fast-compare'
-import { localStorageDelete, localStorageGet, localStorageSet } from './local_storage'
+import { KVStore } from './kv_store'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
+import { getExternalKeyOrder, getStableKeys, setExternalKeyOrder } from './stable_keys'
 
 export {
   getNestedValue,
@@ -9,55 +10,42 @@ export {
   getStableKeys,
   isClass,
   isEqual,
+  isRecord,
   joinPath,
   notifyListeners,
   produce,
   rename,
   setExternalKeyOrder,
   setLeaf,
+  setNestedValue,
   subscribe,
+  testReset,
+  updateSnapshot,
   useDebounce,
   useObject
 }
 
-const memoryStore = new Map<string, unknown>()
+const inMemStorage = new Map<string, unknown>()
 const listeners = new Map<string, Set<() => void>>()
 const descendantListenerKeysByPrefix = new Map<string, Set<string>>()
 const virtualRevisions = new Map<string, number>()
-const externalKeyOrder = new WeakMap<object, string[]>()
+
+const store = new KVStore({
+  inMemStorage,
+  memoryOnly: false
+})
+const memoryStore = new KVStore({
+  inMemStorage,
+  memoryOnly: true
+})
+
+function testReset() {
+  store.reset()
+  memoryStore.reset()
+}
 
 function isVirtualKey(key: string) {
   return key.endsWith('.__juststore_keys') || key === '__juststore_keys'
-}
-
-function setExternalKeyOrder(target: object, keys: string[]) {
-  externalKeyOrder.set(target, keys)
-}
-
-function hasOwn(target: object, key: string) {
-  return Object.prototype.hasOwnProperty.call(target, key)
-}
-
-function getStableKeys(value: unknown): string[] {
-  if (!isRecord(value)) return []
-  const target = value as Record<string, unknown>
-  const existing = externalKeyOrder.get(target as unknown as object)
-  if (existing) {
-    const next = existing.filter(k => hasOwn(target, k))
-    const nextSet = new Set(next)
-    for (const k of Object.keys(target)) {
-      if (nextSet.has(k)) continue
-      next.push(k)
-    }
-    if (next.length !== existing.length) {
-      setExternalKeyOrder(target, next)
-    }
-    return next
-  }
-
-  const keys = Object.keys(target)
-  setExternalKeyOrder(target, keys)
-  return keys
 }
 
 // check if the value is a class instance
@@ -95,12 +83,18 @@ function isEqual(a: unknown, b: unknown): boolean {
   return rfcIsEqual(a, b)
 }
 
-type KeyValueStore = {
-  has: (key: string) => boolean
-  get: (key: string) => unknown
-  set: (key: string, value: unknown, memoryOnly?: boolean) => void
-  delete: (key: string, memoryOnly?: boolean) => void
-  readonly size: number
+/**
+ * Extracts the root namespace from a full key.
+ *
+ * @param key - Full key string
+ * @returns Namespace
+ * @example
+ * getNamespace('app.user.name') // 'app'
+ */
+function getNamespace(key: string): string {
+  const index = key.indexOf('.')
+  if (index === -1) return key
+  return key.slice(0, index)
 }
 
 /**
@@ -113,6 +107,48 @@ type KeyValueStore = {
 function joinPath(namespace: string, path?: string): string {
   if (!path) return namespace
   return namespace + '.' + path
+}
+
+function joinChildKey(parent: string, child: string): string {
+  return parent ? `${parent}.${child}` : child
+}
+
+function getKeyPrefixes(key: string): string[] {
+  const dot = key.indexOf('.')
+  if (dot === -1) return []
+
+  const parts = key.split('.')
+  if (parts.length <= 1) return []
+
+  const prefixes: string[] = []
+  let current = parts[0]!
+  for (let i = 1; i < parts.length - 1; i++) {
+    current += '.' + parts[i]!
+    prefixes.push(current)
+  }
+  prefixes.unshift(parts[0]!)
+  return prefixes
+}
+
+/** Snapshot getter used by React's useSyncExternalStore. */
+function getSnapshot(key: string, memoryOnly: boolean) {
+  if (isVirtualKey(key)) {
+    return virtualRevisions.get(key) ?? 0
+  }
+  if (memoryOnly) {
+    return memoryStore.get(key)
+  } else {
+    return store.get(key)
+  }
+}
+
+/** Updates the snapshot of a key. */
+function updateSnapshot(key: string, value: unknown, memoryOnly: boolean) {
+  if (memoryOnly) {
+    memoryStore.set(key, value)
+  } else {
+    store.set(key, value)
+  }
 }
 
 // Path traversal utilities
@@ -181,7 +217,7 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
         : (() => {
             const existing = obj as Record<string, unknown>
             const next = { ...existing }
-            const order = externalKeyOrder.get(existing)
+            const order = getExternalKeyOrder(existing)
             if (order) setExternalKeyOrder(next, order)
             return next
           })()
@@ -223,7 +259,7 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
       } else {
         const existingObj = existing as Record<string, unknown>
         next = { ...existingObj }
-        const order = externalKeyOrder.get(existingObj)
+        const order = getExternalKeyOrder(existingObj)
         if (order) setExternalKeyOrder(next, order)
       }
       currentObj[segment] = next
@@ -243,11 +279,11 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
     }
   } else if (typeof current === 'object' && current !== null) {
     const currentObj = current as Record<string, unknown>
-    const hadKey = hasOwn(currentObj, lastSegment)
+    const hadKey = Object.prototype.hasOwnProperty.call(currentObj, lastSegment)
     if (value === undefined) {
       delete currentObj[lastSegment]
       if (hadKey) {
-        const order = externalKeyOrder.get(currentObj)
+        const order = getExternalKeyOrder(currentObj)
         if (order)
           setExternalKeyOrder(
             currentObj,
@@ -257,62 +293,13 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
     } else {
       currentObj[lastSegment] = value
       if (!hadKey) {
-        const order = externalKeyOrder.get(currentObj)
+        const order = getExternalKeyOrder(currentObj)
         if (order) setExternalKeyOrder(currentObj, [...order, lastSegment])
       }
     }
   }
 
   return result
-}
-
-/**
- * Extracts the root namespace from a full key.
- *
- * @param key - Full key string
- * @returns Namespace
- * @example
- * getNamespace('app.user.name') // 'app'
- */
-function getNamespace(key: string): string {
-  const index = key.indexOf('.')
-  if (index === -1) return key
-  return key.slice(0, index)
-}
-
-/**
- * Extracts the namespace and path from a full key.
- *
- * @param key - Full key string
- * @returns [namespace, path]
- * @example
- * splitNSPath('app.user.name') // ['app', 'user.name']
- */
-function splitNSPath(key: string): [string, string] {
-  const index = key.indexOf('.')
-  if (index === -1) return [key, '']
-  return [key.slice(0, index), key.slice(index + 1)]
-}
-
-function getKeyPrefixes(key: string): string[] {
-  const dot = key.indexOf('.')
-  if (dot === -1) return []
-
-  const parts = key.split('.')
-  if (parts.length <= 1) return []
-
-  const prefixes: string[] = []
-  let current = parts[0]!
-  for (let i = 1; i < parts.length - 1; i++) {
-    current += '.' + parts[i]!
-    prefixes.push(current)
-  }
-  prefixes.unshift(parts[0]!)
-  return prefixes
-}
-
-function joinChildKey(parent: string, child: string): string {
-  return parent ? `${parent}.${child}` : child
 }
 
 /**
@@ -435,135 +422,6 @@ function notifyVirtualKey(key: string) {
   })
 }
 
-// BroadcastChannel for cross-tab synchronization
-const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('juststore') : null
-
-/**
- * Backing store providing in-memory data with localStorage persistence
- * and cross-tab synchronization. All operations are namespaced at the root key
- * (characters before the first dot).
- */
-const store: KeyValueStore = {
-  has(key: string) {
-    const rootKey = getNamespace(key)
-    return (
-      memoryStore.has(rootKey) ||
-      (typeof window !== 'undefined' && localStorageGet(rootKey) !== undefined)
-    )
-  },
-  get(key: string) {
-    const [rootKey, path] = splitNSPath(key)
-
-    // Get root object from memory or localStorage
-    let rootValue: unknown
-    if (memoryStore.has(rootKey)) {
-      rootValue = memoryStore.get(rootKey)
-    } else if (typeof window !== 'undefined') {
-      rootValue = localStorageGet(rootKey)
-      if (rootValue !== undefined) {
-        memoryStore.set(rootKey, rootValue)
-      }
-    }
-
-    // If no path, return root value
-    if (!path) return rootValue
-
-    // Traverse to nested value
-    return getNestedValue(rootValue, path)
-  },
-  set(key: string, value: unknown, memoryOnly = false) {
-    if (value === undefined) {
-      return this.delete(key, memoryOnly)
-    }
-
-    const [rootKey, path] = splitNSPath(key)
-
-    let rootValue: unknown
-
-    if (!path) {
-      // Setting root value directly
-      rootValue = value
-    } else {
-      // Setting nested value
-      const currentRoot = memoryStore.get(rootKey) ?? localStorageGet(rootKey) ?? {}
-      rootValue = setNestedValue(currentRoot, path, value)
-    }
-
-    // Update memory
-    memoryStore.set(rootKey, rootValue)
-
-    // Persist to localStorage (unless memoryOnly)
-    if (!memoryOnly && typeof window !== 'undefined') {
-      localStorageSet(rootKey, rootValue)
-
-      // Broadcast change to other tabs
-      if (broadcastChannel) {
-        broadcastChannel.postMessage({ type: 'set', key: rootKey, value: rootValue })
-      }
-    }
-  },
-  delete(key: string, memoryOnly = false) {
-    const [rootKey, path] = splitNSPath(key)
-
-    if (!path) {
-      // Deleting root key
-      memoryStore.delete(rootKey)
-      if (!memoryOnly && typeof window !== 'undefined') {
-        localStorageDelete(rootKey)
-        if (broadcastChannel) {
-          broadcastChannel.postMessage({ type: 'delete', key: rootKey })
-        }
-      }
-    } else {
-      // Deleting nested value
-      const currentRoot = memoryStore.get(rootKey) ?? localStorageGet(rootKey)
-      if (currentRoot !== undefined) {
-        const updatedRoot = setNestedValue(currentRoot, path, undefined)
-        memoryStore.set(rootKey, updatedRoot)
-
-        if (!memoryOnly && typeof window !== 'undefined') {
-          localStorageSet(rootKey, updatedRoot)
-          if (broadcastChannel) {
-            broadcastChannel.postMessage({ type: 'set', key: rootKey, value: updatedRoot })
-          }
-        }
-      }
-    }
-  },
-  get size() {
-    return memoryStore.size
-  }
-}
-
-/** Snapshot getter used by React's useSyncExternalStore. */
-function getSnapshot(key: string) {
-  if (isVirtualKey(key)) {
-    return virtualRevisions.get(key) ?? 0
-  }
-  return store.get(key)
-}
-
-// Cross-tab synchronization: keep memoryStore in sync with BroadcastChannel events
-if (broadcastChannel) {
-  broadcastChannel.addEventListener('message', event => {
-    const { type, key, value } = event.data
-    if (!key) return
-
-    // Store old value before updating
-    const oldRootValue = memoryStore.get(key)
-
-    if (type === 'delete') {
-      memoryStore.delete(key)
-    } else if (type === 'set') {
-      memoryStore.set(key, value)
-    }
-
-    // Notify all listeners that might be affected by this root key change
-    const newRootValue = type === 'delete' ? undefined : value
-    notifyListeners(key, oldRootValue, newRootValue)
-  })
-}
-
 /**
  * Subscribes to changes for a specific key.
  *
@@ -617,13 +475,16 @@ function subscribe(key: string, listener: () => void) {
  * @param skipUpdate - When true, skips notifying listeners
  * @param memoryOnly - When true, skips localStorage persistence
  */
-function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = false) {
-  const current = store.get(key)
+function produce(key: string, value: unknown, skipUpdate: boolean, memoryOnly: boolean) {
+  if (skipUpdate) {
+    updateSnapshot(key, value, memoryOnly)
+    return
+  }
+
+  const current = getSnapshot(key, memoryOnly)
 
   if (isEqual(current, value)) return
-  store.set(key, value, memoryOnly)
-
-  if (skipUpdate) return
+  updateSnapshot(key, value, memoryOnly)
 
   // Notify listeners hierarchically with old and new values
   notifyListeners(key, current, value)
@@ -642,12 +503,12 @@ function produce(key: string, value: unknown, skipUpdate = false, memoryOnly = f
  * @param oldKey - The old key to rename
  * @param newKey - The new key to rename to
  */
-function rename(path: string, oldKey: string, newKey: string) {
-  const current = store.get(path)
+function rename(path: string, oldKey: string, newKey: string, memoryOnly: boolean) {
+  const current = getSnapshot(path, memoryOnly)
   if (current === undefined || current === null || typeof current !== 'object') {
     // assign a new object with the new key
     const next = { [newKey]: undefined }
-    store.set(path, next)
+    updateSnapshot(path, next, memoryOnly)
     setExternalKeyOrder(next, [newKey])
     notifyListeners(path, current, next)
     return
@@ -655,13 +516,13 @@ function rename(path: string, oldKey: string, newKey: string) {
 
   const obj = current as Record<string, unknown>
   if (oldKey === newKey) return
-  if (!hasOwn(obj, oldKey)) return
+  if (!Object.prototype.hasOwnProperty.call(obj, oldKey)) return
 
   const keyOrder = getStableKeys(obj)
   const entries: [string, unknown][] = []
 
   for (const key of keyOrder) {
-    if (!hasOwn(obj, key)) continue
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
     if (key === oldKey) {
       entries.push([newKey, obj[oldKey]])
       continue
@@ -670,7 +531,7 @@ function rename(path: string, oldKey: string, newKey: string) {
   }
 
   const newObject = Object.fromEntries(entries)
-  store.set(path, newObject)
+  updateSnapshot(path, newObject, memoryOnly)
   setExternalKeyOrder(newObject, Array.from(new Set(entries.map(([k]) => k))))
   notifyListeners(path, current, newObject)
 }
@@ -683,14 +544,19 @@ function rename(path: string, oldKey: string, newKey: string) {
  *
  * @param key - The namespace or full key
  * @param path - Optional path within the namespace
+ * @param memoryOnly - When true, skips localStorage persistence
  * @returns The current value at the path, or undefined if not set
  */
-function useObject<T extends FieldValues, P extends FieldPath<T>>(key: string, path?: P) {
+function useObject<T extends FieldValues, P extends FieldPath<T>>(
+  key: string,
+  path: P | undefined,
+  memoryOnly: boolean
+) {
   const fullKey = joinPath(key, path)
   const value = useSyncExternalStore(
     listener => subscribe(fullKey, listener),
-    () => getSnapshot(fullKey),
-    () => getSnapshot(fullKey)
+    () => getSnapshot(fullKey, memoryOnly),
+    () => getSnapshot(fullKey, memoryOnly)
   )
 
   return value as FieldPathValue<T, P> | undefined
@@ -705,23 +571,23 @@ function useObject<T extends FieldValues, P extends FieldPath<T>>(key: string, p
  * @param key - The namespace or full key
  * @param path - Path within the namespace
  * @param delay - Debounce delay in milliseconds
+ * @param memoryOnly - When true, skips localStorage persistence
  * @returns The debounced value at the path
  */
 function useDebounce<T extends FieldValues, P extends FieldPath<T>>(
   key: string,
   path: P,
-  delay: number
+  delay: number,
+  memoryOnly: boolean
 ): FieldPathValue<T, P> | undefined {
   const fullKey = joinPath(key, path)
   const currentValue = useSyncExternalStore(
     listener => subscribe(fullKey, listener),
-    () => getSnapshot(fullKey),
-    () => getSnapshot(fullKey)
-  ) as FieldPathValue<T, P> | undefined
+    () => getSnapshot(fullKey, memoryOnly),
+    () => getSnapshot(fullKey, memoryOnly)
+  ) as FieldPathValue<T, P>
 
-  const [debouncedValue, setDebouncedValue] = useState<FieldPathValue<T, P> | undefined>(
-    currentValue
-  )
+  const [debouncedValue, setDebouncedValue] = useState(currentValue)
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
 
   useEffect(() => {
@@ -763,6 +629,33 @@ function setLeaf<T extends FieldValues, P extends FieldPath<T>>(
 ) {
   const fullKey = joinPath(key, path)
   produce(fullKey, value, skipUpdate, memoryOnly)
+}
+
+// BroadcastChannel for cross-tab synchronization
+const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('juststore') : null
+
+// Cross-tab synchronization: keep memoryStore in sync with BroadcastChannel events
+if (broadcastChannel) {
+  store.setBroadcastChannel(broadcastChannel)
+  memoryStore.setBroadcastChannel(broadcastChannel)
+
+  broadcastChannel.addEventListener('message', event => {
+    const { type, key, value } = event.data
+    if (!key) return
+
+    // Store old value before updating
+    const oldRootValue = memoryStore.get(key)
+
+    if (type === 'delete') {
+      memoryStore.delete(key)
+    } else if (type === 'set') {
+      memoryStore.set(key, value)
+    }
+
+    // Notify all listeners that might be affected by this root key change
+    const newRootValue = type === 'delete' ? undefined : value
+    notifyListeners(key, oldRootValue, newRootValue)
+  })
 }
 
 // Debug helpers (dev only)

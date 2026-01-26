@@ -14,9 +14,10 @@ export type {
   State,
   StoreRenderProps,
   StoreRoot,
-  StoreSetStateAction,
+  StoreSetStateValue,
   StoreShowProps,
-  StoreUse,
+  StoreUseComputeFn,
+  StoreUseState,
   ValueState
 }
 
@@ -70,31 +71,27 @@ type ObjectMutationMethods = {
 }
 
 /** Tuple returned by Store.use(path). */
-type StoreUse<T> = Readonly<[T | undefined, (value: T | undefined) => void]>
+type StoreUseState<T> = Readonly<[T, (value: StoreSetStateValue<T>, skipUpdate?: boolean) => void]>
 
-type StoreSetStateAction<T> = (
-  value: T | undefined | ((prev: T) => T),
-  skipUpdate?: boolean
-) => void
+/** Value type for set method. */
+type StoreSetStateValue<T> = T | ((prev: T) => T)
 
 /** Public API returned by createStore(namespace, defaultValue). */
 type StoreRoot<T extends FieldValues> = {
   /** Get the state object for a path. */
   state: <P extends FieldPath<T>>(path: P) => State<FieldPathValue<T, P>>
   /** Subscribe and read the value at path. Re-renders when the value changes. */
-  use: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
+  use: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P>
   /** Subscribe and read the debounced value at path. Re-renders when the value changes. */
-  useDebounce: <P extends FieldPath<T>>(path: P, delay: number) => FieldPathValue<T, P> | undefined
+  useDebounce: <P extends FieldPath<T>>(path: P, delay: number) => FieldPathValue<T, P>
   /** Convenience hook returning [value, setValue] for the path. */
-  useState: <P extends FieldPath<T>>(path: P) => StoreUse<FieldPathValue<T, P>>
+  useState: <P extends FieldPath<T>>(path: P) => StoreUseState<FieldPathValue<T, P>>
   /** Read without subscribing. */
-  value: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P> | undefined
+  value: <P extends FieldPath<T>>(path: P) => FieldPathValue<T, P>
   /** Set value at path (creates intermediate nodes as needed). */
   set: <P extends FieldPath<T>>(
     path: P,
-    value:
-      | FieldPathValue<T, P>
-      | ((prev: FieldPathValue<T, P> | undefined) => FieldPathValue<T, P>),
+    value: StoreSetStateValue<FieldPathValue<T, P>>,
     skipUpdate?: boolean
   ) => void
   /** Delete value at path (for arrays, removes index; for objects, deletes key). */
@@ -112,7 +109,7 @@ type StoreRoot<T extends FieldValues> = {
   /** Compute a derived value from the current value, similar to useState + useMemo */
   useCompute: <P extends FieldPath<T>, R>(
     path: P,
-    fn: (value: FieldPathValue<T, P>) => R,
+    fn: StoreUseComputeFn<T, P, R>,
     deps?: readonly unknown[]
   ) => R
   /** Notify listeners at path. */
@@ -139,9 +136,9 @@ type ValueState<T> = {
   /** Subscribe and read the debounced value at path. Re-renders when the value changes. */
   useDebounce(delay: number): T
   /** Convenience hook returning [value, setValue] for the path. */
-  useState(): readonly [T, (value: T | undefined) => void]
+  useState(): StoreUseState<T>
   /** Set value at path (creates intermediate nodes as needed). */
-  set(value: T | undefined | ((prev: T) => T), skipUpdate?: boolean): void
+  set(value: T | ((prev: T) => T), skipUpdate?: boolean): void
   /** Delete value at path (for arrays, removes index; for objects, deletes key). */
   reset(): void
   /** Subscribe to changes at path and invoke listener with the new value.
@@ -177,13 +174,7 @@ type ValueState<T> = {
    * state.set(10) // sets the derived value
    * state.reset() // resets the derived value
    */
-  derived: <R>({
-    from,
-    to
-  }: {
-    from?: (value: T | undefined) => R
-    to?: (value: R) => T | undefined
-  }) => State<R>
+  derived: <R>({ from, to }: DerivedStateProps<T, R>) => State<R>
   /** Notify listener of current value. */
   notify(): void
   /** Render-prop helper for inline usage.
@@ -194,7 +185,7 @@ type ValueState<T> = {
    * </store.a.b.c.Render>
    */
   Render: (props: {
-    children: (value: T, update: (value: T | undefined) => void) => React.ReactNode
+    children: (value: T, update: (value: T) => void) => React.ReactNode
   }) => React.ReactNode
   /** Show or hide children based on the value at the path.
    *
@@ -234,12 +225,17 @@ type ObjectState<T extends FieldValues, Nullable extends boolean = false> = Obje
   ValueState<MaybeNullable<T, Nullable>> &
   ObjectMutationMethods
 
+/** Type for useCompute function. */
+type StoreUseComputeFn<T extends FieldValues, P extends FieldPath<T>, R> = (
+  value: FieldPathValue<T, P>
+) => R
+
 /** Props for Store.Render helper. */
 type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
   path: P
   children: (
-    value: FieldPathValue<T, P> | undefined,
-    update: (value: FieldPathValue<T, P> | undefined) => void
+    value: FieldPathValue<T, P>,
+    update: (value: StoreSetStateValue<FieldPathValue<T, P>>) => void
   ) => React.ReactNode
 }
 
@@ -247,10 +243,10 @@ type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
 type StoreShowProps<T extends FieldValues, P extends FieldPath<T>> = {
   path: P
   children: React.ReactNode
-  on: (value: FieldPathValue<T, P> | undefined) => boolean
+  on: (value: FieldPathValue<T, P>) => boolean
 }
 
 type DerivedStateProps<T, R> = {
-  from?: (value: T | undefined) => R
-  to?: (value: R) => T | undefined
+  from?: (value: T) => R
+  to?: (value: R) => T
 }

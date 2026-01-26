@@ -9,6 +9,7 @@ import type { FieldPath, FieldPathValue, FieldValues, IsEqual } from './path'
 import { createStoreRoot } from './root'
 import type {
   ArrayProxy,
+  DerivedStateProps,
   IsNullable,
   MaybeNullable,
   ObjectMutationMethods,
@@ -17,6 +18,7 @@ import type {
 } from './types'
 
 export {
+  createForm,
   useForm,
   type CreateFormOptions,
   type DeepNonNullable,
@@ -63,13 +65,7 @@ interface FormValueState<T> extends Omit<ValueState<T>, 'withDefault' | 'derived
    * state.set(10) // sets the derived value
    * state.reset() // resets the derived value
    */
-  derived: <R>({
-    from,
-    to
-  }: {
-    from?: (value: T | undefined) => R
-    to?: (value: R) => T | undefined
-  }) => FormState<R>
+  derived: <R>({ from, to }: DerivedStateProps<T, R>) => FormState<R>
 }
 
 type FormArrayState<T, Nullable extends boolean = false, TT = MaybeNullable<T[], Nullable>> =
@@ -102,7 +98,7 @@ type FormStore<T extends FieldValues> = FormState<T> & {
 type NoEmptyValidator = 'not-empty'
 type RegexValidator = RegExp
 type FunctionValidator<T extends FieldValues> = (
-  value: FieldPathValue<T, FieldPath<T>> | undefined,
+  value: FieldPathValue<T, FieldPath<T>>,
   state: FormStore<T>
 ) => string | undefined
 
@@ -113,6 +109,9 @@ type FieldConfig<T extends FieldValues> = {
 }
 
 type CreateFormOptions<T extends FieldValues> = Partial<Record<FieldPath<T>, FieldConfig<T>>>
+
+type UnsubscribeFn = () => void
+type UnsubscribeFns = UnsubscribeFn[]
 
 /**
  * React hook that creates a form store with validation support.
@@ -144,69 +143,10 @@ function useForm<T extends FieldValues>(
 ): FormStore<T> {
   const formId = useId()
   const namespace = `form:${formId}`
-  const errorNamespace = `errors.${namespace}`
-
-  const storeApi = createStoreRoot<T>(namespace, defaultValue, { memoryOnly: true })
-  const errorStore = createStoreRoot<Record<string, string | undefined>>(
-    errorNamespace,
-    {},
-    { memoryOnly: true }
+  const [form, unsubscribeFns] = useMemo(
+    () => createForm(namespace, defaultValue, fieldConfigs),
+    [namespace, defaultValue, fieldConfigs]
   )
-
-  const formStore = useMemo(
-    () => ({
-      clearErrors: () => produce(errorNamespace, undefined, false, true),
-      handleSubmit: (onSubmit: (value: T) => void) => (e: React.FormEvent) => {
-        e.preventDefault()
-        // disable submit if there are errors
-        if (Object.keys(getSnapshot(errorNamespace) ?? {}).length === 0) {
-          onSubmit(getSnapshot(namespace) as T)
-        }
-      }
-    }),
-    [namespace, errorNamespace]
-  )
-
-  const store = useMemo(
-    () =>
-      new Proxy(storeApi, {
-        get(_target, prop) {
-          if (prop in formStore) {
-            return formStore[prop as keyof typeof formStore]
-          }
-          if (prop in storeApi) {
-            return storeApi[prop as keyof typeof storeApi]
-          }
-          if (typeof prop === 'string') {
-            return createFormProxy(storeApi, errorStore, prop)
-          }
-          return undefined
-        }
-      }) as unknown as FormStore<T>,
-    [storeApi, formStore, errorStore]
-  )
-
-  const unsubscribeFns = useMemo(() => {
-    const unsubscribeFns: (() => void)[] = []
-    for (const entry of Object.entries(fieldConfigs)) {
-      const [path, config] = entry as [FieldPath<T>, FieldConfig<T>]
-      const validator = getValidator(path, config?.validate)
-
-      if (validator) {
-        const unsubscribe = storeApi.subscribe(path, (value: FieldPathValue<T, FieldPath<T>>) => {
-          const error = validator(value, store)
-          if (!error) {
-            errorStore.reset(path)
-          } else {
-            errorStore.set(path, error as any)
-          }
-        })
-        unsubscribeFns.push(unsubscribe)
-      }
-    }
-    return unsubscribeFns
-  }, [fieldConfigs, storeApi, errorStore, store])
-
   useEffect(() => {
     return () => {
       for (const unsubscribe of unsubscribeFns) {
@@ -214,8 +154,62 @@ function useForm<T extends FieldValues>(
       }
     }
   }, [unsubscribeFns])
+  return form
+}
 
-  return store
+function createForm<T extends FieldValues>(
+  namespace: string,
+  defaultValue: T,
+  fieldConfigs: CreateFormOptions<T> = {}
+): [FormStore<T>, UnsubscribeFns] {
+  const errorNamespace = `_juststore_form_errors.${namespace}`
+  const errorStore = createStoreRoot<Record<string, string | undefined>>(
+    errorNamespace,
+    {},
+    { memoryOnly: true }
+  )
+
+  const storeApi = createStoreRoot<T>(namespace, defaultValue, { memoryOnly: true })
+  const formApi = {
+    clearErrors: () => produce(errorNamespace, undefined, false, true),
+    handleSubmit: (onSubmit: (value: T) => void) => (e: React.FormEvent) => {
+      e.preventDefault()
+      // disable submit if there are errors
+      if (Object.keys(getSnapshot(errorNamespace, true) ?? {}).length === 0) {
+        onSubmit(getSnapshot(namespace, true) as T)
+      }
+    }
+  }
+
+  const store = createFormProxy<T>(storeApi, errorStore) as unknown as FormStore<T>
+  const proxy = new Proxy(formApi, {
+    get(target, prop) {
+      if (prop in target) {
+        return target[prop as keyof typeof target]
+      }
+      return store[prop as keyof typeof store]
+    }
+  }) as FormStore<T>
+
+  const unsubscribeFns: UnsubscribeFns = []
+  for (const entry of Object.entries(fieldConfigs)) {
+    const [path, config] = entry as [FieldPath<T>, FieldConfig<T>]
+    const validator = getValidator(path, config?.validate)
+
+    if (validator) {
+      const unsubscribe = storeApi.subscribe(path, value => {
+        const error = validator(value, store)
+        if (!error) {
+          errorStore.reset(path)
+        } else {
+          errorStore.set(path, error as any)
+        }
+      })
+      unsubscribeFns.push(unsubscribe)
+    }
+  }
+
+  return [proxy, unsubscribeFns]
 }
 
 /**
@@ -226,29 +220,24 @@ function useForm<T extends FieldValues>(
  * @param path - The field path
  * @returns A proxy with both state methods and error methods
  */
-const createFormProxy = (
-  storeApi: StoreRoot<any>,
-  errorStore: StoreRoot<Record<string, string | undefined>>,
-  path: string
-) => {
+function createFormProxy<T extends FieldValues>(
+  storeApi: StoreRoot<T>,
+  errorStore: StoreRoot<Record<string, string | undefined>>
+) {
   const proxyCache = new Map<string, any>()
 
-  const useError = () => errorStore.use(path)
-  const getError = () => errorStore.value(path)
-  const setError = (error: string | undefined) => {
-    errorStore.set(path, error)
-    return true
-  }
-
-  return createNode(storeApi, path, proxyCache, {
+  return createNode(storeApi, '', proxyCache, {
     useError: {
-      get: () => useError
+      get: (path: FieldPath<T>) => () => errorStore.use(path)
     },
     error: {
-      get: getError
+      get: (path: FieldPath<T>) => errorStore.value(path)
     },
     setError: {
-      get: () => setError
+      get: (path: FieldPath<T>) => (error: string | undefined) => {
+        errorStore.set(path, error as any, false)
+        return true
+      }
     }
   })
 }

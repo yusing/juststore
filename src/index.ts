@@ -1,3 +1,4 @@
+export { createAtom, type Atom } from './atom'
 export type * from './form'
 export { useForm } from './form'
 export { createMemoryStore, useMemoryStore, type MemoryStore } from './memory'

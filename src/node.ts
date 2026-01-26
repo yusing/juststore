@@ -27,11 +27,11 @@ function createRootNode<T extends FieldValues, P extends FieldPath<T>>(
  * Extension interface for adding custom getters/setters to proxy nodes.
  * Used internally by form handling to add error-related methods.
  */
-type Extension = {
+type Extension<T extends FieldValues> = {
   /** Custom getter function */
-  get?: () => any
+  get?: (path: FieldPath<T>) => any
   /** Custom setter function; returns true if the set was handled */
-  set?: (value: any) => boolean
+  set?: <P extends FieldPath<T>>(path: P, value: FieldPathValue<T, P>) => boolean
 }
 
 /**
@@ -53,7 +53,7 @@ function createNode<T extends FieldValues>(
   storeApi: StoreRoot<any>,
   path: string,
   cache: Map<string, any>,
-  extensions?: Record<string | symbol, Extension>,
+  extensions?: Record<string | symbol, Extension<T>>,
   from = unchanged,
   to = unchanged
 ): State<T> {
@@ -349,7 +349,7 @@ function createNode<T extends FieldValues>(
       }
 
       if (extensions?.[prop]?.get) {
-        return extensions[prop]?.get()
+        return extensions[prop]?.get(path as FieldPath<T>)
       }
 
       if (typeof prop === 'string' || typeof prop === 'number') {
@@ -360,7 +360,7 @@ function createNode<T extends FieldValues>(
     },
     set(_target, prop, value) {
       if (extensions?.[prop]?.set) {
-        return extensions[prop]?.set(value)
+        return extensions[prop]?.set(path as FieldPath<T>, value)
       }
       if (typeof prop === 'string' || typeof prop === 'number') {
         const nextPath = path ? `${path}.${prop}` : String(prop)

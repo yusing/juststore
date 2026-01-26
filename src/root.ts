@@ -14,7 +14,13 @@ import {
 } from './impl'
 import { createRootNode } from './node'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
-import type { StoreRenderProps, StoreRoot, StoreShowProps } from './types'
+import type {
+  StoreRenderProps,
+  StoreRoot,
+  StoreSetStateValue,
+  StoreShowProps,
+  StoreUseComputeFn
+} from './types'
 
 export { createStoreRoot, type StoreOptions }
 
@@ -29,63 +35,67 @@ type StoreOptions = {
 /**
  * Creates the core store API with path-based methods.
  *
- * This is an internal function that sets up the subscription system, persistence,
- * and provides the base API that the proxy wraps. The returned object contains
- * methods like `use`, `set`, `value`, etc. that accept path strings.
+ * Uses a Proxy pattern for lazy initialization and caching of methods,
+ * similar to the atom implementation. Methods are only created when first accessed
+ * and then cached for subsequent use.
  *
  * @param namespace - Unique identifier for the store
  * @param defaultValue - Initial state merged with any persisted data
  * @param options - Configuration options
- * @returns The store API object with path-based methods
+ * @returns A proxy object providing both path-based and dynamic property access to the store
  */
 function createStoreRoot<T extends FieldValues>(
   namespace: string,
   defaultValue: T,
   options: StoreOptions = {}
-) {
+): StoreRoot<T> {
   const memoryOnly = options?.memoryOnly ?? false
-  if (memoryOnly) {
-    produce(namespace, undefined, true, false) // clear localStorage value
-  }
-  produce(namespace, { ...defaultValue, ...(getSnapshot(namespace) ?? {}) }, true, true)
+  // merge with default value and save in memory only
+  produce(namespace, { ...defaultValue, ...(getSnapshot(namespace, memoryOnly) ?? {}) }, true, true)
 
   const storeApi: StoreRoot<T> = {
     state: <P extends FieldPath<T>>(path: P) => createRootNode(storeApi, path),
-    use: <P extends FieldPath<T>>(path: P) => useObject<T, P>(namespace, path),
+    use: <P extends FieldPath<T>>(path: P) =>
+      useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>,
     useDebounce: <P extends FieldPath<T>>(path: P, delay: number) =>
-      useDebounce<T, P>(namespace, path, delay),
+      useDebounce<T, P>(namespace, path, delay, memoryOnly) as FieldPathValue<T, P>,
     set: <P extends FieldPath<T>>(
       path: P,
-      value:
-        | FieldPathValue<T, P>
-        | ((prev: FieldPathValue<T, P> | undefined) => FieldPathValue<T, P>),
+      value: StoreSetStateValue<FieldPathValue<T, P>>,
       skipUpdate = false
     ) => {
+      if (typeof value !== 'function') {
+        return setLeaf<T, P>(namespace, path, value, skipUpdate, memoryOnly)
+      }
       const currentValue = storeApi.value(path)
-      const newValue =
-        typeof value === 'function'
-          ? (value as (prev: FieldPathValue<T, P> | undefined) => FieldPathValue<T, P>)(
-              currentValue
-            )
-          : value
+      const newValue = value(currentValue)
       return setLeaf<T, P>(namespace, path, newValue, skipUpdate, memoryOnly)
     },
     value: <P extends FieldPath<T>>(path: P) =>
-      getSnapshot(joinPath(namespace, path)) as FieldPathValue<T, P>,
-    reset: <P extends FieldPath<T>>(path: P) =>
-      produce(joinPath(namespace, path), undefined, false, memoryOnly),
+      getSnapshot(joinPath(namespace, path), memoryOnly) as FieldPathValue<T, P>,
+    reset: <P extends FieldPath<T>>(path: P) => {
+      return produce(
+        joinPath(namespace, path),
+        getNestedValue(defaultValue, path),
+        false,
+        memoryOnly
+      )
+    },
     rename: <P extends FieldPath<T>>(path: P, oldKey: string, newKey: string) =>
-      rename(joinPath(namespace, path), oldKey, newKey),
-    subscribe:
-      <P extends FieldPath<T>>(path: P, listener: (value: FieldPathValue<T, P>) => void) =>
-      () => {
-        subscribe(joinPath(namespace, path), () =>
-          listener(getSnapshot(joinPath(namespace, path)) as FieldPathValue<T, P>)
-        )
-      },
+      rename(joinPath(namespace, path), oldKey, newKey, memoryOnly),
+    subscribe: <P extends FieldPath<T>>(
+      path: P,
+      listener: (value: FieldPathValue<T, P>) => void
+    ) => {
+      const fullPath = joinPath(namespace, path)
+      const unsubscribe = subscribe(fullPath, () =>
+        listener(getSnapshot(fullPath, memoryOnly) as FieldPathValue<T, P>)
+      )
+      return unsubscribe
+    },
     useCompute: <P extends FieldPath<T>, R>(
       path: P,
-      fn: (value: FieldPathValue<T, P>) => R,
+      fn: StoreUseComputeFn<T, P, R>,
       deps?: readonly unknown[]
     ) => {
       const fullPath = joinPath(namespace, path)
@@ -112,7 +122,7 @@ function createStoreRoot<T extends FieldValues>(
           cacheRef.current = null
         }
 
-        const storeValue = getSnapshot(fullPath)
+        const storeValue = getSnapshot(fullPath, memoryOnly)
         if (cacheRef.current && isEqual(cacheRef.current.storeValue, storeValue)) {
           // same store value, return the same computed value
           return cacheRef.current.computed
@@ -134,7 +144,7 @@ function createStoreRoot<T extends FieldValues>(
       return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
     },
     notify: <P extends FieldPath<T>>(path: P) => {
-      const value = getNestedValue(getSnapshot(namespace), path)
+      const value = getNestedValue(getSnapshot(namespace, memoryOnly), path)
       return notifyListeners(joinPath(namespace, path), value, value, {
         skipRoot: true,
         skipChildren: true,
@@ -144,9 +154,9 @@ function createStoreRoot<T extends FieldValues>(
     useState: <P extends FieldPath<T>>(path: P) => {
       const fullPath = joinPath(namespace, path)
       const setValue = useCallback(
-        <V extends FieldPathValue<T, P> | undefined>(value: V | ((prev: V) => V)) => {
+        <V extends FieldPathValue<T, P>>(value: StoreSetStateValue<V>) => {
           if (typeof value === 'function') {
-            const currentValue = getSnapshot(fullPath) as V
+            const currentValue = getSnapshot(fullPath, memoryOnly) as V
             const newValue = value(currentValue)
             return setLeaf<T, P>(namespace, path, newValue, false, memoryOnly)
           }
@@ -154,31 +164,29 @@ function createStoreRoot<T extends FieldValues>(
         },
         [fullPath, path]
       )
-      return [useObject<T, P>(namespace, path), setValue] as const
+      return [
+        useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>,
+        setValue
+      ] as const
     },
     Render: <P extends FieldPath<T>>({ path, children }: StoreRenderProps<T, P>) => {
       const fullPath = joinPath(namespace, path)
-      const value = useObject<T, P>(namespace, path)
+      const value = useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>
       const update = useCallback(
-        (
-          value:
-            | FieldPathValue<T, P>
-            | ((prev: FieldPathValue<T, P> | undefined) => FieldPathValue<T, P>)
-            | undefined
-        ) => {
+        (value: StoreSetStateValue<FieldPathValue<T, P>>) => {
           if (typeof value === 'function') {
-            const currentValue = getSnapshot(fullPath) as FieldPathValue<T, P> | undefined
+            const currentValue = getSnapshot(fullPath, memoryOnly) as FieldPathValue<T, P>
             const newValue = value(currentValue)
             return setLeaf(namespace, path, newValue, false, memoryOnly)
           }
-          return setLeaf(namespace, path, value, false, memoryOnly)
+          return setLeaf(namespace, path, value as FieldPathValue<T, P>, false, memoryOnly)
         },
         [fullPath, path]
       )
       return children(value, update)
     },
     Show: <P extends FieldPath<T>>({ path, children, on }: StoreShowProps<T, P>) => {
-      const value = useObject<T, P>(namespace, path)
+      const value = useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>
       if (!on(value)) {
         return null
       }

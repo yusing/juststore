@@ -1,11 +1,22 @@
-import { getSnapshot, getStableKeys, produce, rename, setExternalKeyOrder } from '../src/impl'
+import {
+  getSnapshot,
+  getStableKeys,
+  produce,
+  rename,
+  setExternalKeyOrder,
+  testReset
+} from '../src/impl'
 
-import { expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
+
+afterEach(() => {
+  testReset()
+})
 
 const path = 'obj'
 
 function get(): Record<string, unknown> {
-  return getSnapshot(path) as Record<string, unknown>
+  return getSnapshot(path, true) as Record<string, unknown>
 }
 
 test('rename', () => {
@@ -13,17 +24,17 @@ test('rename', () => {
   const obj = { a: 0, '1': 1, '2': 2, '3': 3, e: 4 }
   setExternalKeyOrder(obj, ['a', '1', '2', '3', 'e'])
   produce(path, obj, false, true)
-  rename(path, '2', '5')
+  rename(path, '2', '5', true)
 
   expect(getStableKeys(get())).toEqual(['a', '1', '5', '3', 'e'])
   expect(get()).toEqual({ a: 0, '1': 1, '5': 2, '3': 3, e: 4 })
 
-  rename(path, '5', 'c')
+  rename(path, '5', 'c', true)
 
   expect(getStableKeys(get())).toEqual(['a', '1', 'c', '3', 'e'])
   expect(get()).toEqual({ a: 0, '1': 1, c: 2, '3': 3, e: 4 })
 
-  rename(path, 'c', '2')
+  rename(path, 'c', '2', true)
 
   expect(getStableKeys(get())).toEqual(['a', '1', '2', '3', 'e'])
   expect(get()).toEqual({ a: 0, '1': 1, '2': 2, '3': 3, e: 4 })
@@ -41,10 +52,10 @@ test('empty segment in path is treated as object key, not array index', () => {
   // Set at nested path that includes an empty segment
   produce(`${root}.providers.docker.`, {}, false, true)
 
-  const snapshot = getSnapshot(root) as Record<string, unknown>
+  const snapshot = getSnapshot(root, true) as Record<string, unknown>
   expect(snapshot).toEqual({ providers: { docker: { '': {} } } })
   expect(Array.isArray((snapshot as any).providers?.docker)).toBe(false)
 
   // Reading the same path should work
-  expect(getSnapshot(`${root}.providers.docker.`)).toEqual({})
+  expect(getSnapshot(`${root}.providers.docker.`, true)).toEqual({})
 })
