@@ -2,7 +2,7 @@
 'use client'
 
 import { pascalCase } from 'change-case'
-import { useId } from 'react'
+import { useEffect, useId, useMemo } from 'react'
 import { getSnapshot, produce } from './impl'
 import { createNode } from './node'
 import type { FieldPath, FieldPathValue, FieldValues, IsEqual } from './path'
@@ -153,47 +153,67 @@ function useForm<T extends FieldValues>(
     { memoryOnly: true }
   )
 
-  const formStore = {
-    clearErrors: () => produce(errorNamespace, undefined, false, true),
-    handleSubmit: (onSubmit: (value: T) => void) => (e: React.FormEvent) => {
-      e.preventDefault()
-      // disable submit if there are errors
-      if (Object.keys(getSnapshot(errorNamespace) ?? {}).length === 0) {
-        onSubmit(getSnapshot(namespace) as T)
-      }
-    }
-  }
-
-  const store = new Proxy(storeApi, {
-    get(_target, prop) {
-      if (prop in formStore) {
-        return formStore[prop as keyof typeof formStore]
-      }
-      if (prop in storeApi) {
-        return storeApi[prop as keyof typeof storeApi]
-      }
-      if (typeof prop === 'string') {
-        return createFormProxy(storeApi, errorStore, prop)
-      }
-      return undefined
-    }
-  }) as unknown as FormStore<T>
-
-  for (const entry of Object.entries(fieldConfigs)) {
-    const [path, config] = entry as [FieldPath<T>, FieldConfig<T>]
-    const validator = getValidator(path, config?.validate)
-
-    if (validator) {
-      storeApi.subscribe(path, (value: FieldPathValue<T, FieldPath<T>>) => {
-        const error = validator(value, store)
-        if (!error) {
-          errorStore.reset(path)
-        } else {
-          errorStore.set(path, error as any)
+  const formStore = useMemo(
+    () => ({
+      clearErrors: () => produce(errorNamespace, undefined, false, true),
+      handleSubmit: (onSubmit: (value: T) => void) => (e: React.FormEvent) => {
+        e.preventDefault()
+        // disable submit if there are errors
+        if (Object.keys(getSnapshot(errorNamespace) ?? {}).length === 0) {
+          onSubmit(getSnapshot(namespace) as T)
         }
-      })
+      }
+    }),
+    [namespace, errorNamespace]
+  )
+
+  const store = useMemo(
+    () =>
+      new Proxy(storeApi, {
+        get(_target, prop) {
+          if (prop in formStore) {
+            return formStore[prop as keyof typeof formStore]
+          }
+          if (prop in storeApi) {
+            return storeApi[prop as keyof typeof storeApi]
+          }
+          if (typeof prop === 'string') {
+            return createFormProxy(storeApi, errorStore, prop)
+          }
+          return undefined
+        }
+      }) as unknown as FormStore<T>,
+    [storeApi, formStore, errorStore]
+  )
+
+  const unsubscribeFns = useMemo(() => {
+    const unsubscribeFns: (() => void)[] = []
+    for (const entry of Object.entries(fieldConfigs)) {
+      const [path, config] = entry as [FieldPath<T>, FieldConfig<T>]
+      const validator = getValidator(path, config?.validate)
+
+      if (validator) {
+        const unsubscribe = storeApi.subscribe(path, (value: FieldPathValue<T, FieldPath<T>>) => {
+          const error = validator(value, store)
+          if (!error) {
+            errorStore.reset(path)
+          } else {
+            errorStore.set(path, error as any)
+          }
+        })
+        unsubscribeFns.push(unsubscribe)
+      }
     }
-  }
+    return unsubscribeFns
+  }, [fieldConfigs, storeApi, errorStore, store])
+
+  useEffect(() => {
+    return () => {
+      for (const unsubscribe of unsubscribeFns) {
+        unsubscribe()
+      }
+    }
+  }, [unsubscribeFns])
 
   return store
 }
