@@ -10,8 +10,7 @@ import {
   setLeaf,
   subscribe,
   useDebounce,
-  useObject,
-  useSubscribe
+  useObject
 } from './impl'
 import { createRootNode } from './node'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
@@ -77,9 +76,13 @@ function createStoreRoot<T extends FieldValues>(
       produce(joinPath(namespace, path), undefined, false, memoryOnly),
     rename: <P extends FieldPath<T>>(path: P, oldKey: string, newKey: string) =>
       rename(joinPath(namespace, path), oldKey, newKey),
-    subscribe: <P extends FieldPath<T>>(path: P, listener: (value: FieldPathValue<T, P>) => void) =>
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      useSubscribe<FieldPathValue<T, P>>(joinPath(namespace, path), listener),
+    subscribe:
+      <P extends FieldPath<T>>(path: P, listener: (value: FieldPathValue<T, P>) => void) =>
+      () => {
+        subscribe(joinPath(namespace, path), () =>
+          listener(getSnapshot(joinPath(namespace, path)) as FieldPathValue<T, P>)
+        )
+      },
     useCompute: <P extends FieldPath<T>, R>(
       path: P,
       fn: (value: FieldPathValue<T, P>) => R,

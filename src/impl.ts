@@ -17,8 +17,7 @@ export {
   setLeaf,
   subscribe,
   useDebounce,
-  useObject,
-  useSubscribe
+  useObject
 }
 
 const memoryStore = new Map<string, unknown>()
@@ -744,32 +743,6 @@ function useDebounce<T extends FieldValues, P extends FieldPath<T>>(
   }, [currentValue, delay, debouncedValue])
 
   return debouncedValue as FieldPathValue<T, P> | undefined
-}
-
-/**
- * React hook for side effects when a value changes.
- *
- * Unlike `use()`, this doesn't cause re-renders. Instead, it calls the
- * provided callback whenever the value changes, useful for syncing with
- * external systems or triggering effects.
- *
- * @param key - The full key path to subscribe to
- * @param onChange - Callback invoked with the new value on each change
- */
-function useSubscribe<T>(key: string, onChange: (value: T) => void) {
-  const onChangeRef = useRef(onChange)
-  useEffect(() => {
-    onChangeRef.current = onChange
-  }, [onChange])
-
-  useEffect(() => {
-    const unsubscribe = subscribe(key, () => {
-      const value = getSnapshot(key) as T
-      onChangeRef.current(value)
-    })
-
-    return unsubscribe
-  }, [key])
 }
 
 /**

@@ -101,11 +101,14 @@ type StoreRoot<T extends FieldValues> = {
   reset: <P extends FieldPath<T>>(path: P) => void
   /** Rename a key in an object. */
   rename: <P extends FieldPath<T>>(path: P, oldKey: string, newKey: string) => void
-  /** Subscribe to changes at path and invoke listener with the new value. */
+  /** Subscribe to changes at path and invoke listener with the new value
+   *
+   * @returns A function to unsubscribe from the path.
+   */
   subscribe: <P extends FieldPath<T>>(
     path: P,
     listener: (value: FieldPathValue<T, P>) => void
-  ) => void
+  ) => () => void
   /** Compute a derived value from the current value, similar to useState + useMemo */
   useCompute: <P extends FieldPath<T>, R>(
     path: P,
@@ -141,8 +144,19 @@ type ValueState<T> = {
   set(value: T | undefined | ((prev: T) => T), skipUpdate?: boolean): void
   /** Delete value at path (for arrays, removes index; for objects, deletes key). */
   reset(): void
-  /** Subscribe to changes at path and invoke listener with the new value. */
-  subscribe(listener: (value: T) => void): void
+  /** Subscribe to changes at path and invoke listener with the new value.
+   *
+   * @returns A function to unsubscribe.
+   * @example
+   *
+   * useEffect(() => {
+   *   const unsubscribe = store.a.b.c.subscribe(value => {
+   *     console.log(value)
+   *   })
+   *   return unsubscribe
+   * }, [])
+   */
+  subscribe(listener: (value: T) => void): () => void
   /** Compute a derived value from the current value, similar to useState + useMemo */
   useCompute: <R>(fn: (value: T) => R, deps?: readonly unknown[]) => R
   /** Ensure the value is an array. */
