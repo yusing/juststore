@@ -1,9 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { getSnapshot, subscribe, updateSnapshot } from './impl'
+import { getSnapshot, updateSnapshot } from './impl'
 
 export { createAtom, type Atom }
-
-type AtomValue<T> = T extends number | string | boolean ? T : never
 
 /**
  * An atom is a value that can be subscribed to and updated.
@@ -52,7 +50,7 @@ type Atom<T> = {
  *   </>
  * )
  */
-function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<AtomValue<T>> {
+function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<T> {
   const key = `atom:${id}`
   const memoryOnly = !persistent
 
@@ -95,7 +93,7 @@ function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<At
       return undefined
     }
   })
-  return atomProxy as Atom<AtomValue<T>>
+  return atomProxy as Atom<T>
 }
 
 /**
@@ -110,7 +108,7 @@ function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<At
  */
 function useAtom<T>(key: string, memoryOnly = true) {
   const value = useSyncExternalStore(
-    listener => subscribe(key, listener),
+    listener => subscribeAtom(key, memoryOnly, listener),
     () => getSnapshot(key, memoryOnly),
     () => getSnapshot(key, memoryOnly)
   )
