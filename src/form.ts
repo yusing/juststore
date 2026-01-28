@@ -68,7 +68,7 @@ interface FormValueState<T> extends Omit<ValueState<T>, 'withDefault' | 'derived
   derived: <R>({ from, to }: DerivedStateProps<T, R>) => FormState<R>
 }
 
-type FormArrayState<T, Nullable extends boolean = false, TT = MaybeNullable<T[], Nullable>> =
+type FormArrayState<T, Nullable extends boolean = false, TT = MaybeNullable<T, Nullable>> =
   IsEqual<T, unknown> extends true ? never : FormValueState<TT[]> & ArrayProxy<TT, FormState<TT>>
 
 type FormObjectState<T extends FieldValues, Nullable extends boolean = false> = {
