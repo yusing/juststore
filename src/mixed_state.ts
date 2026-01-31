@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { isEqual } from './impl'
 import type { ReadOnlyState, ValueState } from './types'
 
 export { createMixedState }
@@ -24,11 +25,26 @@ function createMixedState<T extends readonly unknown[]>(
   const use = () => states.map(state => state.use()) as unknown as Readonly<T>
   const mixedState = {
     get value() {
-      return states.map(state => state.value) as unknown as Readonly<T>
+      return states.map(state => state.value) as unknown as Readonly<T[keyof T][]>
     },
     use,
-    useCompute<R>(fn: (value: unknown) => R) {
-      return states.map(state => state.useCompute(value => fn(value)))
+    useCompute<R>(fn: (value: readonly T[keyof T][]) => R) {
+      const [value, setValue] = useState<R | undefined>(fn(this.value))
+
+      const recompute = useCallback(() => {
+        const newValue = fn(this.value)
+        // skip update if the new value is the same as the previous value
+        setValue(prev => (isEqual(prev, newValue) ? prev : newValue))
+      }, [fn])
+
+      useEffect(() => {
+        const unsubscribeFns = states.map(state => state.subscribe(recompute))
+        return () => {
+          unsubscribeFns.forEach(unsubscribe => unsubscribe())
+        }
+      })
+
+      return value
     },
     Render({ children }: { children: (value: Readonly<T>) => React.ReactNode }) {
       const value = use()
