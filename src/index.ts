@@ -1,6 +1,7 @@
 export { createAtom, type Atom } from './atom'
 export type * from './form'
 export { useForm } from './form'
+export { isEqual } from './impl'
 export { createMemoryStore, useMemoryStore, type MemoryStore } from './memory'
 export { createMixedState } from './mixed_state'
 export type * from './path'
