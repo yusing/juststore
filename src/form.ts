@@ -13,6 +13,7 @@ import type {
   IsNullable,
   MaybeNullable,
   ObjectMutationMethods,
+  Prettify,
   StoreRoot,
   ValueState
 } from './types'
@@ -50,7 +51,21 @@ type FormState<T> =
         ? FormObjectState<NonNullable<T>, IsNullable<T>>
         : FormValueState<T>
 
-interface FormValueState<T> extends Omit<ValueState<T>, 'withDefault' | 'derived'>, FormCommon {
+type FormReadOnlyState<T> = Prettify<
+  Pick<
+    FormValueState<Readonly<Required<T>>>,
+    'value' | 'use' | 'useCompute' | 'Render' | 'Show' | 'error' | 'setError'
+  >
+>
+
+interface FormValueState<T>
+  extends
+    Omit<ValueState<T>, 'ensureArray' | 'ensureObject' | 'withDefault' | 'derived'>,
+    FormCommon {
+  /** Ensure the value is an array. */
+  ensureArray(): NonNullable<T> extends (infer U)[] ? FormArrayState<U> : never
+  /** Ensure the value is an object. */
+  ensureObject(): NonNullable<T> extends FieldValues ? FormObjectState<NonNullable<T>> : never
   /** Return a new state with a default value, and make the type non-nullable */
   withDefault(defaultValue: T): FormState<NonNullable<T>>
   /** Virtual state derived from the current value.
@@ -68,12 +83,23 @@ interface FormValueState<T> extends Omit<ValueState<T>, 'withDefault' | 'derived
   derived: <R>({ from, to }: DerivedStateProps<T, R>) => FormState<R>
 }
 
-type FormArrayState<T, Nullable extends boolean = false, TT = MaybeNullable<T, Nullable>> =
-  IsEqual<T, unknown> extends true ? never : FormValueState<TT[]> & ArrayProxy<TT, FormState<TT>>
-
-type FormObjectState<T extends FieldValues, Nullable extends boolean = false> = {
+type FormObjectProxy<T extends FieldValues> = {
+  /** Virtual state for the object's keys.
+   *
+   * This does NOT read from a real `keys` property on the stored object; it results in a stable array of keys.
+   */
+  readonly keys: FormReadOnlyState<FieldPath<T>[]>
+} & {
   [K in keyof T]-?: FormState<T[K]>
-} & FormValueState<MaybeNullable<T, Nullable>> &
+}
+
+type FormArrayState<T, Nullable extends boolean = false> =
+  IsEqual<T, unknown> extends true
+    ? never
+    : FormValueState<MaybeNullable<T[], Nullable>> & ArrayProxy<T, FormState<T>>
+
+type FormObjectState<T extends FieldValues, Nullable extends boolean = false> = FormObjectProxy<T> &
+  FormValueState<MaybeNullable<T, Nullable>> &
   ObjectMutationMethods
 
 /** Type for nested objects with proxy methods */
