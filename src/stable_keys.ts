@@ -17,7 +17,7 @@ function getStableKeys(value: unknown): string[] {
   const target = value as Record<string, unknown>
   const existing = externalKeyOrder.get(target as unknown as object)
   if (existing) {
-    const next = existing.filter(k => Object.prototype.hasOwnProperty.call(target, k))
+    const next = existing.filter(k => Object.hasOwn(target, k))
     const nextSet = new Set(next)
     for (const k of Object.keys(target)) {
       if (nextSet.has(k)) continue

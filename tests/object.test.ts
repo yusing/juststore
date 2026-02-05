@@ -1,3 +1,4 @@
+import { afterEach, expect, test } from 'bun:test'
 import {
   getSnapshot,
   getStableKeys,
@@ -6,8 +7,6 @@ import {
   setExternalKeyOrder,
   testReset
 } from '../src/impl'
-
-import { afterEach, expect, test } from 'bun:test'
 
 afterEach(() => {
   testReset()

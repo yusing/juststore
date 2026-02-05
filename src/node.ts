@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/** biome-ignore-all lint/suspicious/noExplicitAny: <T is not known at this point> */
+/** biome-ignore-all lint/suspicious/noAssignInExpressions: <getter methods are cached> */
 import { getStableKeys } from './impl'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
 import type { DerivedStateProps, ReadOnlyState, State, StoreRoot } from './types'
@@ -434,7 +435,6 @@ function createKeysNode(
         }) => children(storeApi.useCompute(signalPath, computeKeys), () => {}))
       }
       if (prop === 'Show') {
-        // eslint-disable-next-line react/display-name
         return (_target._Show ??= ({
           children,
           on

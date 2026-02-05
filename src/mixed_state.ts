@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import type React from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { isEqual } from './impl'
 import type { ReadOnlyState, ValueState } from './types'
 
@@ -40,7 +41,9 @@ function createMixedState<T extends readonly unknown[]>(
       useEffect(() => {
         const unsubscribeFns = states.map(state => state.subscribe(recompute))
         return () => {
-          unsubscribeFns.forEach(unsubscribe => unsubscribe())
+          unsubscribeFns.forEach(unsubscribe => {
+            unsubscribe()
+          })
         }
       })
 

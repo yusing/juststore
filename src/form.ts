@@ -59,8 +59,7 @@ type FormReadOnlyState<T> = Prettify<
 >
 
 interface FormValueState<T>
-  extends
-    Omit<ValueState<T>, 'ensureArray' | 'ensureObject' | 'withDefault' | 'derived'>,
+  extends Omit<ValueState<T>, 'ensureArray' | 'ensureObject' | 'withDefault' | 'derived'>,
     FormCommon {
   /** Ensure the value is an array. */
   ensureArray(): NonNullable<T> extends (infer U)[] ? FormArrayState<U> : never

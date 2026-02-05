@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/** biome-ignore-all lint/suspicious/noExplicitAny: <Intended> */
 
 export type Primitive = null | undefined | string | number | boolean | symbol | bigint
 export type BrowserNativeObject = Date | FileList | File
@@ -233,7 +233,7 @@ type PathValueImpl<T, P extends string> = T extends any
 export type FieldPathValue<
   TFieldValues extends FieldValues,
   TFieldPath extends FieldPath<TFieldValues>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  // biome-ignore lint/complexity/noBannedTypes: <Intended to exclude any function or function like>
 > = Exclude<PathValue<TFieldValues, TFieldPath>, Function>
 
 export type FieldValues = Record<string, any>

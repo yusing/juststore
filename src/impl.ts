@@ -106,7 +106,7 @@ function getNamespace(key: string): string {
  */
 function joinPath(namespace: string, path?: string): string {
   if (!path) return namespace
-  return namespace + '.' + path
+  return `${namespace}.${path}`
 }
 
 function joinChildKey(parent: string, child: string): string {
@@ -117,16 +117,16 @@ function getKeyPrefixes(key: string): string[] {
   const dot = key.indexOf('.')
   if (dot === -1) return []
 
-  const parts = key.split('.')
-  if (parts.length <= 1) return []
+  const [first, ...parts] = key.split('.')
+  if (parts.length === 0) return []
 
   const prefixes: string[] = []
-  let current = parts[0]!
+  let current = first
   for (let i = 1; i < parts.length - 1; i++) {
-    current += '.' + parts[i]!
+    current += `.${parts[i]}`
     prefixes.push(current)
   }
-  prefixes.unshift(parts[0]!)
+  prefixes.unshift(first)
   return prefixes
 }
 
@@ -279,7 +279,7 @@ function setNestedValue(obj: unknown, path: string, value: unknown): unknown {
     }
   } else if (typeof current === 'object' && current !== null) {
     const currentObj = current as Record<string, unknown>
-    const hadKey = Object.prototype.hasOwnProperty.call(currentObj, lastSegment)
+    const hadKey = Object.hasOwn(currentObj, lastSegment)
     if (value === undefined) {
       delete currentObj[lastSegment]
       if (hadKey) {
@@ -344,7 +344,9 @@ function notifyListeners(
     // exact match only
     const listenerSet = listeners.get(key)
     if (listenerSet) {
-      listenerSet.forEach(listener => listener())
+      listenerSet.forEach(listener => {
+        listener()
+      })
     }
     return
   }
@@ -352,7 +354,9 @@ function notifyListeners(
   // Exact key match
   const exactSet = listeners.get(key)
   if (exactSet) {
-    exactSet.forEach(listener => listener())
+    exactSet.forEach(listener => {
+      listener()
+    })
   }
 
   // Ancestor keys match (including namespace root)
@@ -360,7 +364,9 @@ function notifyListeners(
     const namespace = getNamespace(key)
     const rootSet = listeners.get(namespace)
     if (rootSet) {
-      rootSet.forEach(listener => listener())
+      rootSet.forEach(listener => {
+        listener()
+      })
     }
 
     // Also notify intermediate ancestors
@@ -369,7 +375,9 @@ function notifyListeners(
       if (prefix === namespace) continue // Already handled
       const prefixSet = listeners.get(prefix)
       if (prefixSet) {
-        prefixSet.forEach(listener => listener())
+        prefixSet.forEach(listener => {
+          listener()
+        })
       }
     }
   }
@@ -405,7 +413,9 @@ function notifyListeners(
         if (forceNotify || !isEqual(oldChildValue, newChildValue)) {
           const childSet = listeners.get(childKey)
           if (childSet) {
-            childSet.forEach(listener => listener())
+            childSet.forEach(listener => {
+              listener()
+            })
           }
         }
       }
@@ -433,14 +443,14 @@ function subscribe(key: string, listener: () => void) {
   if (!listeners.has(key)) {
     listeners.set(key, new Set())
   }
-  listeners.get(key)!.add(listener)
+  listeners.get(key)?.add(listener)
 
   const prefixes = getKeyPrefixes(key)
   for (const prefix of prefixes) {
     if (!descendantListenerKeysByPrefix.has(prefix)) {
       descendantListenerKeysByPrefix.set(prefix, new Set())
     }
-    descendantListenerKeysByPrefix.get(prefix)!.add(key)
+    descendantListenerKeysByPrefix.get(prefix)?.add(key)
   }
 
   return () => {
@@ -516,13 +526,13 @@ function rename(path: string, oldKey: string, newKey: string, memoryOnly: boolea
 
   const obj = current as Record<string, unknown>
   if (oldKey === newKey) return
-  if (!Object.prototype.hasOwnProperty.call(obj, oldKey)) return
+  if (!Object.hasOwn(obj, oldKey)) return
 
   const keyOrder = getStableKeys(obj)
   const entries: [string, unknown][] = []
 
   for (const key of keyOrder) {
-    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
+    if (!Object.hasOwn(obj, key)) continue
     if (key === oldKey) {
       entries.push([newKey, obj[oldKey]])
       continue
