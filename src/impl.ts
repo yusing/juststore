@@ -122,7 +122,7 @@ function getKeyPrefixes(key: string): string[] {
 
   const prefixes: string[] = []
   let current = first
-  for (let i = 1; i < parts.length - 1; i++) {
+  for (let i = 0; i < parts.length - 1; i++) {
     current += `.${parts[i]}`
     prefixes.push(current)
   }
@@ -362,11 +362,13 @@ function notifyListeners(
   // Ancestor keys match (including namespace root)
   if (!skipRoot) {
     const namespace = getNamespace(key)
-    const rootSet = listeners.get(namespace)
-    if (rootSet) {
-      rootSet.forEach(listener => {
-        listener()
-      })
+    if (namespace !== key) {
+      const rootSet = listeners.get(namespace)
+      if (rootSet) {
+        rootSet.forEach(listener => {
+          listener()
+        })
+      }
     }
 
     // Also notify intermediate ancestors
