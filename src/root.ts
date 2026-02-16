@@ -49,6 +49,8 @@ function createStoreRoot<T extends FieldValues>(
   defaultValue: T,
   options: StoreOptions = {}
 ): StoreRoot<T> {
+  'use memo'
+
   const memoryOnly = options?.memoryOnly ?? false
   // merge with default value and save in memory only
   produce(namespace, { ...defaultValue, ...(getSnapshot(namespace, memoryOnly) ?? {}) }, true, true)
@@ -152,17 +154,11 @@ function createStoreRoot<T extends FieldValues>(
       })
     },
     useState: <P extends FieldPath<T>>(path: P) => {
-      const fullPath = joinPath(namespace, path)
       const setValue = useCallback(
         <V extends FieldPathValue<T, P>>(value: StoreSetStateValue<V>) => {
-          if (typeof value === 'function') {
-            const currentValue = getSnapshot(fullPath, memoryOnly) as V
-            const newValue = value(currentValue)
-            return setLeaf<T, P>(namespace, path, newValue, false, memoryOnly)
-          }
-          return setLeaf<T, P>(namespace, path, value, false, memoryOnly)
+          storeApi.set(path, value, false)
         },
-        [fullPath, path]
+        [path]
       )
       return [
         useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>,
@@ -170,18 +166,12 @@ function createStoreRoot<T extends FieldValues>(
       ] as const
     },
     Render: <P extends FieldPath<T>>({ path, children }: StoreRenderProps<T, P>) => {
-      const fullPath = joinPath(namespace, path)
       const value = useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>
       const update = useCallback(
         (value: StoreSetStateValue<FieldPathValue<T, P>>) => {
-          if (typeof value === 'function') {
-            const currentValue = getSnapshot(fullPath, memoryOnly) as FieldPathValue<T, P>
-            const newValue = value(currentValue)
-            return setLeaf(namespace, path, newValue, false, memoryOnly)
-          }
-          return setLeaf(namespace, path, value as FieldPathValue<T, P>, false, memoryOnly)
+          storeApi.set(path, value, false)
         },
-        [fullPath, path]
+        [path]
       )
       return children(value, update)
     },
