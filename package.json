@@ -1,6 +1,6 @@
 {
   "name": "juststore",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "A small, expressive, and type-safe state management library for React.",
   "type": "module",
   "main": "dist/index.js",
@@ -21,9 +21,19 @@
     }
   },
   "sideEffects": false,
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "license": "AGPL-3.0-only",
-  "keywords": ["state", "react", "typescript", "hooks", "store", "state management", "react hooks"],
+  "keywords": [
+    "state",
+    "react",
+    "typescript",
+    "hooks",
+    "store",
+    "state management",
+    "react hooks"
+  ],
   "scripts": {
     "build": "bun --bun tsc",
     "typecheck": "bun --bun tsc --noEmit",
