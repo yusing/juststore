@@ -105,27 +105,30 @@ function createStoreRoot<T extends FieldValues>(
       fnRef.current = fn
 
       const cacheRef = useRef<{
-        path: string
         storeValue: unknown
         computed: R
-        deps?: readonly unknown[]
       } | null>(null)
+      const depsRef = useRef<readonly unknown[] | undefined>(deps)
+
+      // Invalidate cached compute when hook inputs change.
+      if (!isEqual(depsRef.current, deps)) {
+        depsRef.current = deps
+        cacheRef.current = null
+      }
+
+      const pathRef = useRef(fullPath)
+      if (pathRef.current !== fullPath) {
+        pathRef.current = fullPath
+        cacheRef.current = null
+      }
 
       const subscribeToPath = useCallback(
         (onStoreChange: () => void) => subscribe(fullPath, onStoreChange),
         [fullPath]
       )
       const getComputedSnapshot = useCallback(() => {
-        if (cacheRef.current && cacheRef.current.path !== fullPath) {
-          cacheRef.current = null
-        }
-
-        if (cacheRef.current && !isEqual(cacheRef.current.deps, deps)) {
-          cacheRef.current = null
-        }
-
         const storeValue = getSnapshot(fullPath, memoryOnly)
-        if (cacheRef.current && isEqual(cacheRef.current.storeValue, storeValue)) {
+        if (cacheRef.current && Object.is(cacheRef.current.storeValue, storeValue)) {
           // same store value, return the same computed value
           return cacheRef.current.computed
         }
@@ -139,9 +142,9 @@ function createStoreRoot<T extends FieldValues>(
           return cacheRef.current.computed
         }
 
-        cacheRef.current = { path: fullPath, storeValue, computed: computedNext, deps }
+        cacheRef.current = { storeValue, computed: computedNext }
         return computedNext
-      }, [fullPath, deps])
+      }, [fullPath])
 
       return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
     },
