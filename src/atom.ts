@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { getSnapshot, updateSnapshot } from './impl'
+import { getSnapshot, updateSnapshot, useCompute } from './impl'
 
 export { createAtom, type Atom }
 
@@ -20,6 +20,8 @@ type Atom<T> = {
   reset: () => void
   /** Subscribe to the value.with a callback function. */
   subscribe: (listener: (value: T) => void) => () => void
+  /** Compute a derived value from the current value, similar to useState + useMemo */
+  useCompute: <R>(fn: (value: T) => R, deps?: readonly unknown[]) => R
 }
 
 type AtomSetState<T> = (value: T | ((prev: T) => T)) => void
@@ -80,6 +82,10 @@ function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<T>
       if (prop === 'subscribe') {
         return (target._subscribe ??= (listener: (value: T) => void) =>
           subscribeAtom(key, memoryOnly, listener))
+      }
+      if (prop === 'useCompute') {
+        return (target._useCompute ??= (fn: (value: T) => unknown, deps?: readonly unknown[]) =>
+          useCompute(key, undefined, fn, deps, memoryOnly))
       }
       return undefined
     }

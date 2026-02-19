@@ -385,7 +385,7 @@ import { Conditional, Render, RenderWithUpdate } from "juststore";
 </RenderWithUpdate>;
 
 <Conditional state={store.user.role} on={(role) => role === "admin"}>
-  {(role) => <div>{role}</div>}
+  <AdminPage />
 </Conditional>;
 ```
 
@@ -429,7 +429,7 @@ Creates memory-only stores (no localStorage persistence).
 Creates a scalar atom-like state.
 
 - `persistent` defaults to `false`
-- methods: `.value`, `.use()`, `.set(value | updater)`, `.reset()`, `.subscribe(listener)`
+- methods: `.value`, `.use()`, `.set(value | updater)`, `.reset()`, `.subscribe(listener)`, `.useCompute(fn, deps?)`
 
 ### `createForm(namespace, defaultValue, fieldConfigs?)` / `useForm(defaultValue, fieldConfigs?)`
 
