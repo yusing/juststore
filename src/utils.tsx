@@ -9,14 +9,14 @@ type ReadOnlyAtomLike<T> = Pick<Atom<T> | ValueState<T>, 'use' | 'value'>
 
 type RenderProps<State extends ReadOnlyAtomLike<unknown>> = {
   state: State
-  children: (value: ReturnType<State['use']>) => React.ReactNode
+  children: (value: State['value']) => React.ReactNode
 }
 
 type RenderWithUpdateProps<State extends AtomLike<unknown>> = {
   state: State
   children: (
-    value: ReturnType<State['use']>,
-    update: (value: StoreSetStateValue<ReturnType<State['use']>>) => void
+    value: State['value'],
+    update: (value: StoreSetStateValue<State['value']>) => void
   ) => React.ReactNode
 }
 
@@ -30,7 +30,7 @@ type RenderWithUpdateProps<State extends AtomLike<unknown>> = {
  * @returns The result of calling children with the current value.
  */
 function Render<State extends ReadOnlyAtomLike<unknown>>({ state, children }: RenderProps<State>) {
-  const value = state.use() as ReturnType<State['use']>
+  const value = state.use() as State['value']
   return children(value)
 }
 
@@ -50,7 +50,7 @@ function RenderWithUpdate<State extends AtomLike<unknown>>({
   state,
   children
 }: RenderWithUpdateProps<State>) {
-  type Value = ReturnType<State['use']>
+  type Value = State['value']
   const value = state.use() as Value
   const update = useCallback(
     (value: StoreSetStateValue<Value>) => {
@@ -81,10 +81,10 @@ function Conditional<State extends ReadOnlyAtomLike<unknown>>({
   children
 }: {
   state: State
-  on: (value: ReturnType<State['use']>) => boolean
-  children: (value: ReturnType<State['use']>) => React.ReactNode
+  on: (value: State['value']) => boolean
+  children: (value: State['value']) => React.ReactNode
 }) {
-  const value = state.use() as ReturnType<State['use']>
+  const value = state.use() as State['value']
   const show = on(value) // on should not be expensive, memorizing just adds overhead
   if (!show) {
     return null
