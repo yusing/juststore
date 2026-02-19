@@ -1,6 +1,6 @@
 {
   "name": "juststore",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A small, expressive, and type-safe state management library for React.",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
   "scripts": {
     "build": "bun --bun tsc",
     "typecheck": "bun --bun tsc --noEmit",
-    "lint": "bun --bun biome",
+    "lint": "bun --bun biome check",
     "format": "bun --bun biome format --write",
     "format:check": "bun --bun biome format",
     "prepublishOnly": "bun run build",
