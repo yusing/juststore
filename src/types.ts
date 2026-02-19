@@ -5,8 +5,6 @@ export type {
   ArrayProxy,
   ArrayState,
   DerivedStateProps,
-  IsNullable,
-  MaybeNullable,
   ObjectMutationMethods,
   ObjectState,
   Prettify,
@@ -35,7 +33,7 @@ type ArrayMutationMethods<T> = Prettify<
 >
 
 /** Type for array proxy with index access */
-type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<T> & {
+type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<NonNullable<T>> & {
   /** Read without subscribing. Returns array or undefined for missing paths. */
   readonly value: T[]
   /**
@@ -131,6 +129,8 @@ type ValueState<T> = {
   readonly value: T
   /** The field name for the proxy. */
   readonly field: string
+  /** The path for the proxy. */
+  readonly path: string
   /** Subscribe and read the value at path. Re-renders when the value changes. */
   use(): T
   /** Subscribe and read the debounced value at path. Re-renders when the value changes. */
@@ -204,26 +204,22 @@ type ReadOnlyState<T> = Prettify<
   Pick<ValueState<Readonly<Required<T>>>, 'value' | 'use' | 'useCompute' | 'Render' | 'Show'>
 >
 
-type MaybeNullable<T, Nullable extends boolean = false> = Nullable extends true ? T | undefined : T
-type IsNullable<T> = T extends undefined | null ? true : false
-
 type State<T> =
   IsEqual<T, unknown> extends true
     ? never
     : [NonNullable<T>] extends [readonly (infer U)[]]
-      ? ArrayState<U, IsNullable<T>>
+      ? ArrayState<U, T>
       : [NonNullable<T>] extends [FieldValues]
-        ? ObjectState<NonNullable<T>, IsNullable<T>>
+        ? ObjectState<NonNullable<T>, T>
         : ValueState<T>
 
-type ArrayState<T, Nullable extends boolean = false> =
-  IsEqual<T, unknown> extends true
-    ? never
-    : ValueState<MaybeNullable<T[], Nullable>> & ArrayProxy<T>
+type ArrayState<TValue, TArray = TValue[]> =
+  IsEqual<TValue, unknown> extends true ? never : ValueState<TArray> & ArrayProxy<TValue>
 
-type ObjectState<T extends FieldValues, Nullable extends boolean = false> = ObjectProxy<T> &
-  ValueState<MaybeNullable<T, Nullable>> &
-  ObjectMutationMethods
+type ObjectState<
+  TNonNullable extends FieldValues,
+  TObject = TNonNullable
+> = ObjectProxy<TNonNullable> & ValueState<TObject> & ObjectMutationMethods
 
 /** Type for useCompute function. */
 type StoreUseComputeFn<T extends FieldValues, P extends FieldPath<T>, R> = (

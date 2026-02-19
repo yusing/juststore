@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/** biome-ignore-all lint/suspicious/noExplicitAny: intended */
 'use client'
 
 import { pascalCase } from 'change-case'
@@ -10,8 +10,6 @@ import { createStoreRoot } from './root'
 import type {
   ArrayProxy,
   DerivedStateProps,
-  IsNullable,
-  MaybeNullable,
   ObjectMutationMethods,
   Prettify,
   StoreRoot,
@@ -46,9 +44,9 @@ type FormState<T> =
   IsEqual<T, unknown> extends true
     ? never
     : [NonNullable<T>] extends [readonly (infer U)[]]
-      ? FormArrayState<U, IsNullable<T>>
+      ? FormArrayState<U, T>
       : [NonNullable<T>] extends [FieldValues]
-        ? FormObjectState<NonNullable<T>, IsNullable<T>>
+        ? FormObjectState<NonNullable<T>, T>
         : FormValueState<T>
 
 type FormReadOnlyState<T> = Prettify<
@@ -92,14 +90,15 @@ type FormObjectProxy<T extends FieldValues> = {
   [K in keyof T]-?: FormState<T[K]>
 }
 
-type FormArrayState<T, Nullable extends boolean = false> =
-  IsEqual<T, unknown> extends true
+type FormArrayState<TValue, TArray = TValue[]> =
+  IsEqual<TValue, unknown> extends true
     ? never
-    : FormValueState<MaybeNullable<T[], Nullable>> & ArrayProxy<T, FormState<T>>
+    : FormValueState<TArray> & ArrayProxy<TValue, FormState<TValue>>
 
-type FormObjectState<T extends FieldValues, Nullable extends boolean = false> = FormObjectProxy<T> &
-  FormValueState<MaybeNullable<T, Nullable>> &
-  ObjectMutationMethods
+type FormObjectState<
+  TNonNullable extends FieldValues,
+  TObject = TNonNullable
+> = FormObjectProxy<TNonNullable> & FormValueState<TObject> & ObjectMutationMethods
 
 /** Type for nested objects with proxy methods */
 type DeepNonNullable<T> = [NonNullable<T>] extends [readonly (infer U)[]]
@@ -117,7 +116,7 @@ type FormStore<T extends FieldValues> = FormState<T> & {
   /** Clears all validation errors from the form. */
   clearErrors(): void
   /** Returns a form submit handler that validates and calls onSubmit with form values. */
-  handleSubmit(onSubmit: (values: T) => void): (e: React.FormEvent) => void
+  handleSubmit(onSubmit: (values: T) => void): (e: React.SyntheticEvent) => void
 }
 
 type NoEmptyValidator = 'not-empty'
@@ -197,7 +196,7 @@ function createForm<T extends FieldValues>(
   const storeApi = createStoreRoot<T>(namespace, defaultValue, { memoryOnly: true })
   const formApi = {
     clearErrors: () => produce(errorNamespace, undefined, false, true),
-    handleSubmit: (onSubmit: (value: T) => void) => (e: React.FormEvent) => {
+    handleSubmit: (onSubmit: (value: T) => void) => (e: React.SyntheticEvent) => {
       e.preventDefault()
       // disable submit if there are errors
       if (Object.keys(getSnapshot(errorNamespace, true) ?? {}).length === 0) {

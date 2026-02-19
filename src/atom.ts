@@ -15,7 +15,7 @@ type Atom<T> = {
   /** Subscribe to the value. */
   use: () => T
   /** Set the value. */
-  set: (value: T) => void
+  set: AtomSetState<T>
   /** Reset the value to the default value. */
   reset: () => void
   /** Subscribe to the value.with a callback function. */
@@ -24,9 +24,13 @@ type Atom<T> = {
   Render: ({
     children
   }: {
-    children: (value: T, setValue: (value: T) => void) => React.ReactNode
+    children: (value: T, setValue: AtomSetState<T>) => React.ReactNode
   }) => React.ReactNode
 }
+
+type AtomSetState<T> = (value: T | ((prev: T) => T)) => void
+
+type AtomSetStateParam<T> = Parameters<AtomSetState<T>>[0]
 
 /**
  * Creates an atom with a given id and default value.
@@ -87,8 +91,11 @@ function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<T>
         return (target._Render ??= ({
           children
         }: {
-          children: (value: T, setValue: (value: T) => void) => React.ReactNode
-        }) => children(useAtom(key, memoryOnly), (value: T) => setAtom(key, value, memoryOnly)))
+          children: (value: T, setValue: AtomSetState<T>) => React.ReactNode
+        }) =>
+          children(useAtom(key, memoryOnly), (value: AtomSetStateParam<T>) =>
+            setAtom(key, value, memoryOnly)
+          ))
       }
       return undefined
     }
@@ -132,8 +139,12 @@ function getAtom<T>(key: string, memoryOnly = true): T {
  * @param value - The value to set
  * @param memoryOnly - When true, skips localStorage persistence
  */
-function setAtom<T>(key: string, value: T, memoryOnly = true) {
-  updateSnapshot(key, value, memoryOnly)
+function setAtom<T>(key: string, value: AtomSetStateParam<T>, memoryOnly = true) {
+  if (typeof value !== 'function') {
+    updateSnapshot(key, value, memoryOnly)
+  } else {
+    updateSnapshot(key, (value as (prev: T) => T)(getAtom<T>(key, memoryOnly)), memoryOnly)
+  }
   notifyAtom(key)
 }
 
