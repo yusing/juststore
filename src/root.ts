@@ -14,13 +14,7 @@ import {
 } from './impl'
 import { createRootNode } from './node'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
-import type {
-  StoreRenderProps,
-  StoreRoot,
-  StoreSetStateValue,
-  StoreShowProps,
-  StoreUseComputeFn
-} from './types'
+import type { StoreRoot, StoreSetStateValue, StoreUseComputeFn } from './types'
 
 export { createStoreRoot, type StoreOptions }
 
@@ -167,23 +161,6 @@ function createStoreRoot<T extends FieldValues>(
         useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>,
         setValue
       ] as const
-    },
-    Render: <P extends FieldPath<T>>({ path, children }: StoreRenderProps<T, P>) => {
-      const value = useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>
-      const update = useCallback(
-        (value: StoreSetStateValue<FieldPathValue<T, P>>) => {
-          storeApi.set(path, value, false)
-        },
-        [path]
-      )
-      return children(value, update)
-    },
-    Show: <P extends FieldPath<T>>({ path, children, on }: StoreShowProps<T, P>) => {
-      const value = useObject<T, P>(namespace, path, memoryOnly) as FieldPathValue<T, P>
-      if (!on(value)) {
-        return null
-      }
-      return children
     }
   }
 

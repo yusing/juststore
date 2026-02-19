@@ -94,26 +94,6 @@ function createNode<T extends FieldValues>(
         return (_target._subscribe ??= (listener: (v: any) => void) =>
           storeApi.subscribe(path, value => listener(to(value))))
       }
-      if (prop === 'Render') {
-        return (_target._Render ??= ({
-          children
-        }: {
-          children: (value: any, update: (value: any) => void) => React.ReactNode
-        }) =>
-          storeApi.Render({
-            path,
-            children: (value, update) => children(from(value), value => update(to(value)))
-          }))
-      }
-      if (prop === 'Show') {
-        return (_target._Show ??= ({
-          children,
-          on
-        }: {
-          children: React.ReactNode
-          on: (value: any) => boolean
-        }) => storeApi.Show({ path, children, on: value => on(from(value)) }))
-      }
       if (prop === 'useCompute') {
         return (_target._useCompute ??= <R>(fn: (value: any) => R) => {
           return storeApi.useCompute(path, value => fn(from(value)))

@@ -20,12 +20,6 @@ type Atom<T> = {
   reset: () => void
   /** Subscribe to the value.with a callback function. */
   subscribe: (listener: (value: T) => void) => () => void
-  /** Render the value. */
-  Render: ({
-    children
-  }: {
-    children: (value: T, setValue: AtomSetState<T>) => React.ReactNode
-  }) => React.ReactNode
 }
 
 type AtomSetState<T> = (value: T | ((prev: T) => T)) => void
@@ -44,11 +38,11 @@ type AtomSetStateParam<T> = Parameters<AtomSetState<T>>[0]
  *   <>
  *    <ComponentA/>
  *     <ComponentB/>
- *      <stateA.Render>
+ *      <Render state={stateA}>
  *        {(value, setValue) => (
  *          <button onClick={() => setValue(!value)}>{value ? 'Hide' : 'Show'}</button>
  *        )}
- *      </stateA.Render>
+ *      </Render>
  *    <ComponentC/>
  *    <ComponentD/>
  *   </>
@@ -86,16 +80,6 @@ function createAtom<T>(id: string, defaultValue: T, persistent = false): Atom<T>
       if (prop === 'subscribe') {
         return (target._subscribe ??= (listener: (value: T) => void) =>
           subscribeAtom(key, memoryOnly, listener))
-      }
-      if (prop === 'Render') {
-        return (target._Render ??= ({
-          children
-        }: {
-          children: (value: T, setValue: AtomSetState<T>) => React.ReactNode
-        }) =>
-          children(useAtom(key, memoryOnly), (value: AtomSetStateParam<T>) =>
-            setAtom(key, value, memoryOnly)
-          ))
       }
       return undefined
     }

@@ -16,9 +16,9 @@ export { createMixedState }
  * @example
  * const mixedState = createMixedState(states.addLoading, states.copyLoading, state.agent)
  *
- * <mixedState.Render>
+ * <Render state={mixedState}>
  *   {[addLoading, copyLoading, agent] => <SomeComponent />}
- * </mixedState.Render>
+ * </Render>
  */
 function createMixedState<T extends readonly unknown[]>(
   ...states: { [K in keyof T]-?: ValueState<T[K]> }
@@ -48,14 +48,6 @@ function createMixedState<T extends readonly unknown[]>(
       })
 
       return value
-    },
-    Render({ children }: { children: (value: Readonly<T>) => React.ReactNode }) {
-      const value = use()
-      return children(value)
-    },
-    Show({ children, on }: { children: React.ReactNode; on: (value: Readonly<T>) => boolean }) {
-      const value = use()
-      return on(value) ? children : null
     }
   } as const
 

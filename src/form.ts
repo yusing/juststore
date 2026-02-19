@@ -50,10 +50,7 @@ type FormState<T> =
         : FormValueState<T>
 
 type FormReadOnlyState<T> = Prettify<
-  Pick<
-    FormValueState<Readonly<Required<T>>>,
-    'value' | 'use' | 'useCompute' | 'Render' | 'Show' | 'error' | 'setError'
-  >
+  Pick<FormValueState<Readonly<Required<T>>>, 'value' | 'use' | 'useCompute' | 'error' | 'setError'>
 >
 
 interface FormValueState<T>

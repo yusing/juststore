@@ -10,10 +10,8 @@ export type {
   Prettify,
   ReadOnlyState,
   State,
-  StoreRenderProps,
   StoreRoot,
   StoreSetStateValue,
-  StoreShowProps,
   StoreUseComputeFn,
   StoreUseState,
   ValueState
@@ -112,15 +110,6 @@ type StoreRoot<T extends FieldValues> = {
   ) => R
   /** Notify listeners at path. */
   notify: <P extends FieldPath<T>>(path: P) => void
-
-  /** Render-prop helper for inline usage. */
-  Render: <P extends FieldPath<T>>(
-    props: FieldPathValue<T, P> extends undefined ? never : StoreRenderProps<T, P>
-  ) => React.ReactNode
-  /** Show or hide children based on the value at the path. */
-  Show: <P extends FieldPath<T>>(
-    props: FieldPathValue<T, P> extends undefined ? never : StoreShowProps<T, P>
-  ) => React.ReactNode
 }
 
 /** Common methods available on any deep proxy node */
@@ -177,31 +166,13 @@ type ValueState<T> = {
   derived: <R>({ from, to }: DerivedStateProps<T, R>) => State<R>
   /** Notify listener of current value. */
   notify(): void
-  /** Render-prop helper for inline usage.
-   *
-   * @example
-   * <store.a.b.c.Render>
-   *   {(value, update) => <button onClick={() => update('new value')}>{value}</button>}
-   * </store.a.b.c.Render>
-   */
-  Render: (props: {
-    children: (value: T, update: (value: T) => void) => React.ReactNode
-  }) => React.ReactNode
-  /** Show or hide children based on the value at the path.
-   *
-   * @example
-   * <store.a.b.c.Show on={value => value === 'show'}>
-   *   <div>Show</div>
-   * </store.a.b.c.Show>
-   */
-  Show: (props: { children: React.ReactNode; on: (value: T) => boolean }) => React.ReactNode
 }
 
 /**
  * A read-only state that provides access to the value, use, Render, and Show methods.
  */
 type ReadOnlyState<T> = Prettify<
-  Pick<ValueState<Readonly<Required<T>>>, 'value' | 'use' | 'useCompute' | 'Render' | 'Show'>
+  Pick<ValueState<Readonly<Required<T>>>, 'value' | 'use' | 'useCompute'>
 >
 
 type State<T> =
@@ -225,22 +196,6 @@ type ObjectState<
 type StoreUseComputeFn<T extends FieldValues, P extends FieldPath<T>, R> = (
   value: FieldPathValue<T, P>
 ) => R
-
-/** Props for Store.Render helper. */
-type StoreRenderProps<T extends FieldValues, P extends FieldPath<T>> = {
-  path: P
-  children: (
-    value: FieldPathValue<T, P>,
-    update: (value: StoreSetStateValue<FieldPathValue<T, P>>) => void
-  ) => React.ReactNode
-}
-
-/** Props for Store.Show helper. */
-type StoreShowProps<T extends FieldValues, P extends FieldPath<T>> = {
-  path: P
-  children: React.ReactNode
-  on: (value: FieldPathValue<T, P>) => boolean
-}
 
 type DerivedStateProps<T, R> = {
   from?: (value: T) => R
