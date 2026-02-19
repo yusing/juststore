@@ -1,14 +1,14 @@
-import { useCallback, useRef, useSyncExternalStore } from 'react'
+import { useCallback } from 'react'
 import {
   getNestedValue,
   getSnapshot,
-  isEqual,
   joinPath,
   notifyListeners,
   produce,
   rename,
   setLeaf,
   subscribe,
+  useCompute,
   useDebounce,
   useObject
 } from './impl'
@@ -94,53 +94,7 @@ function createStoreRoot<T extends FieldValues>(
       fn: StoreUseComputeFn<T, P, R>,
       deps?: readonly unknown[]
     ) => {
-      const fullPath = joinPath(namespace, path)
-      const fnRef = useRef(fn)
-      fnRef.current = fn
-
-      const cacheRef = useRef<{
-        storeValue: unknown
-        computed: R
-      } | null>(null)
-      const depsRef = useRef<readonly unknown[] | undefined>(deps)
-
-      // Invalidate cached compute when hook inputs change.
-      if (!isEqual(depsRef.current, deps)) {
-        depsRef.current = deps
-        cacheRef.current = null
-      }
-
-      const pathRef = useRef(fullPath)
-      if (pathRef.current !== fullPath) {
-        pathRef.current = fullPath
-        cacheRef.current = null
-      }
-
-      const subscribeToPath = useCallback(
-        (onStoreChange: () => void) => subscribe(fullPath, onStoreChange),
-        [fullPath]
-      )
-      const getComputedSnapshot = useCallback(() => {
-        const storeValue = getSnapshot(fullPath, memoryOnly)
-        if (cacheRef.current && Object.is(cacheRef.current.storeValue, storeValue)) {
-          // same store value, return the same computed value
-          return cacheRef.current.computed
-        }
-        const computedNext = fnRef.current(storeValue as FieldPathValue<T, P>)
-
-        // Important: even if storeValue changed, we should avoid forcing a re-render
-        // when the computed result is logically unchanged. `useSyncExternalStore`
-        // uses `Object.is` on the snapshot; returning the same reference will bail out.
-        if (cacheRef.current && isEqual(cacheRef.current.computed, computedNext)) {
-          cacheRef.current.storeValue = storeValue
-          return cacheRef.current.computed
-        }
-
-        cacheRef.current = { storeValue, computed: computedNext }
-        return computedNext
-      }, [fullPath])
-
-      return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
+      return useCompute(namespace, path, fn, deps, memoryOnly)
     },
     notify: <P extends FieldPath<T>>(path: P) => {
       const value = getNestedValue(getSnapshot(namespace, memoryOnly), path)

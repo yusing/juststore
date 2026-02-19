@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import rfcIsEqual from 'react-fast-compare'
 import { KVStore } from './kv_store'
 import type { FieldPath, FieldPathValue, FieldValues } from './path'
@@ -22,7 +22,8 @@ export {
   testReset,
   updateSnapshot,
   useDebounce,
-  useObject
+  useObject,
+  useCompute
 }
 
 const inMemStorage = new Map<string, unknown>()
@@ -474,6 +475,62 @@ function subscribe(key: string, listener: () => void) {
       }
     }
   }
+}
+
+function useCompute<T = unknown, R = unknown>(
+  namespace: string,
+  path: string | undefined,
+  fn: (value: T) => R,
+  deps?: readonly unknown[],
+  memoryOnly = false
+) {
+  const fullPath = joinPath(namespace, path)
+  const fnRef = useRef(fn)
+  fnRef.current = fn
+
+  const cacheRef = useRef<{
+    storeValue: unknown
+    computed: R
+  } | null>(null)
+  const depsRef = useRef<readonly unknown[] | undefined>(deps)
+
+  // Invalidate cached compute when hook inputs change.
+  if (!isEqual(depsRef.current, deps)) {
+    depsRef.current = deps
+    cacheRef.current = null
+  }
+
+  const pathRef = useRef(fullPath)
+  if (pathRef.current !== fullPath) {
+    pathRef.current = fullPath
+    cacheRef.current = null
+  }
+
+  const subscribeToPath = useCallback(
+    (onStoreChange: () => void) => subscribe(fullPath, onStoreChange),
+    [fullPath]
+  )
+  const getComputedSnapshot = useCallback(() => {
+    const storeValue = getSnapshot(fullPath, memoryOnly) as T
+    if (cacheRef.current && Object.is(cacheRef.current.storeValue, storeValue)) {
+      // same store value, return the same computed value
+      return cacheRef.current.computed
+    }
+    const computedNext = fnRef.current(storeValue)
+
+    // Important: even if storeValue changed, we should avoid forcing a re-render
+    // when the computed result is logically unchanged. `useSyncExternalStore`
+    // uses `Object.is` on the snapshot; returning the same reference will bail out.
+    if (cacheRef.current && isEqual(cacheRef.current.computed, computedNext)) {
+      cacheRef.current.storeValue = storeValue
+      return cacheRef.current.computed
+    }
+
+    cacheRef.current = { storeValue, computed: computedNext }
+    return computedNext
+  }, [fullPath, memoryOnly])
+
+  return useSyncExternalStore(subscribeToPath, getComputedSnapshot, getComputedSnapshot)
 }
 
 /**
