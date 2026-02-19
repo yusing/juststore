@@ -400,7 +400,7 @@ import { Conditional, Render, RenderWithUpdate } from "juststore";
 - `useForm(defaultValue, fieldConfigs?)`
 - `createMixedState(...states)`
 - `createAtom(id, defaultValue, persistent?)`
-- `Render`, `RenderWithUpdate`, `Conditional`
+- `Render`, `RenderWithUpdate`, `Conditional`, `ConditionalRender`
 - `isEqual`
 - All public types from `path`, `types`, and `form`
 
@@ -461,7 +461,8 @@ Combines multiple states into one read-only tuple-like state.
 
 - `Render` - render-prop helper for read-only usage
 - `RenderWithUpdate` - render-prop helper with updater callback
-- `Conditional` - conditional render helper based on predicate
+- `Conditional` - show/hide children based on predicate; uses `Activity` so children stay mounted when hidden (state preserved)
+- `ConditionalRender` - render only when predicate is true; children are a render prop receiving the value; returns `null` when false (unmounted)
 
 ## Store / State Methods
 
