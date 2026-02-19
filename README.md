@@ -4,528 +4,534 @@ A small, expressive, and type-safe state management library for React.
 
 ## Features
 
-- **Dot-path addressing** - Access nested values using paths like `store.user.profile.name`
-- **Type-safe paths** - Full TypeScript inference for nested property access
-- **Fine-grained subscriptions** - Components only re-render when their specific data changes
-- **localStorage persistence** - Automatic persistence with cross-tab synchronization via BroadcastChannel
-- **Memory-only stores** - Component-scoped state that doesn't persist
-- **Form handling** - Built-in validation and error management
-- **Array operations** - Native array methods (push, pop, splice, etc.) on array paths
-- **Derived state** - Transform values bidirectionally without extra storage
-- **SSR compatible** - Safe to use in server-side rendering environments
+- Type-safe deep state with property-style access (`store.user.profile.name`)
+- Path-based API for dynamic access (`store.use("user.profile.name")`)
+- Fine-grained subscriptions powered by `useSyncExternalStore`
+- Optional persistence + cross-tab sync (`createStore`)
+- Memory-only scoped stores (`useMemoryStore`, `createMemoryStore`)
+- Built-in form state + validation (`useForm`, `createForm`)
+- Computed, derived, and mixed read models
 
 ## Installation
 
 ```bash
-npm install juststore
-# or
 bun add juststore
 ```
 
 ## Quick Start
 
 ```tsx
-import { createStore } from 'juststore'
+import { createStore } from "juststore";
+import { toast } from "sonner";
 
 type AppState = {
   user: {
-    name: string
+    name: string;
     preferences: {
-      theme: 'light' | 'dark'
-    }
-  }
-  todos: { id: number; text: string; done: boolean }[]
+      theme: "light" | "dark";
+    };
+  };
+  todos: { id: number; text: string; done: boolean }[];
+};
+
+const store = createStore<AppState>("app", {
+  user: {
+    name: "Guest",
+    preferences: { theme: "light" },
+  },
+  todos: [],
+});
+
+async function initUserDetails() {
+  const response = await fetch("/api/user/details");
+  const data = (await response.json()) as AppState["user"];
+  store.user.set(data);
 }
 
-const store = createStore<AppState>('app', {
-  user: {
-    name: 'Guest',
-    preferences: { theme: 'light' }
-  },
-  todos: []
-})
+function ThemeToggle() {
+  const theme = store.user.preferences.theme.use();
+  const nextTheme = theme === "light" ? "dark" : "light";
+
+  const updateTheme = async () => {
+    try {
+      const response = await fetch("/api/user/preferences/theme", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: nextTheme }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Theme update failed");
+      }
+
+      store.user.preferences.theme.set(nextTheme);
+    } catch {
+      toast.error("Failed to update theme");
+    }
+  };
+
+  return <button onClick={updateTheme}>Theme: {theme}</button>;
+}
 ```
 
-## Real-World Examples (GoDoxy Web UI)
+## Real-World Patterns
 
-### Homepage navigation and search
+### 1) Debounced search + category filter
 
 ```tsx
-import { store } from '@/components/home/store'
+type SearchState = {
+  query: string;
+  category: "all" | "running" | "stopped";
+  services: { id: string; name: string; status: "running" | "stopped" }[];
+};
 
-function HomepageFilters() {
-  const categories = store.homepageCategories.use()
-  const [activeCategory, setActiveCategory] = store.navigation.activeCategory.useState()
-  const query = store.searchQuery.useDebounce(150)
+const searchStore = createStore<SearchState>("services-search", {
+  query: "",
+  category: "all",
+  services: [],
+});
 
-  const visibleItems =
-    categories
-      .find(cat => cat.name === activeCategory)
-      ?.items.filter(item => item.name.toLowerCase().includes((query ?? '').toLowerCase())) ?? []
+function SearchQueryInput() {
+  const query = searchStore.query.use() ?? "";
+  return (
+    <input
+      value={query}
+      onChange={(e) => searchStore.query.set(e.target.value)}
+      placeholder="Search services"
+    />
+  );
+}
+
+function SearchCategoryFilter() {
+  const category = searchStore.category.use();
+  return (
+    <select
+      value={category}
+      onChange={(e) =>
+        searchStore.category.set(e.target.value as SearchState["category"])
+      }
+    >
+      <option value="all">All</option>
+      <option value="running">Running</option>
+      <option value="stopped">Stopped</option>
+    </select>
+  );
+}
+
+function SearchResults() {
+  const query = searchStore.query.useDebounce(150) ?? "";
+  const category = searchStore.category.use();
+
+  const visible = searchStore.services.useCompute(
+    (services) => {
+      const list = services ?? [];
+      return list.filter((service) => {
+        const nameMatch = service.name
+          .toLowerCase()
+          .includes(query.toLowerCase());
+        const categoryMatch =
+          category === "all" ? true : service.status === category;
+        return nameMatch && categoryMatch;
+      });
+    },
+    [query, category],
+  );
+
+  return (
+    <ul>
+      {visible.map((service) => (
+        <li key={service.id}>{service.name}</li>
+      ))}
+    </ul>
+  );
+}
+
+function ServiceSearchPage() {
+  return (
+    <>
+      <SearchQueryInput />
+      <SearchCategoryFilter />
+      <SearchResults />
+    </>
+  );
+}
+```
+
+### 2) WebSocket ingestion into normalized state
+
+```tsx
+type RouteUptime = { alias: string; uptime: number };
+type UptimeState = {
+  routeKeys: string[];
+  uptimeByAlias: Record<string, RouteUptime>;
+};
+
+const uptimeStore = createStore<UptimeState>("uptime", {
+  routeKeys: [],
+  uptimeByAlias: {},
+});
+
+function onUptimeMessage(rows: RouteUptime[]) {
+  const keys = rows.map((row) => row.alias).toSorted();
+  uptimeStore.routeKeys.set(keys);
+
+  uptimeStore.uptimeByAlias.set(
+    rows.reduce<Record<string, RouteUptime>>((acc, row) => {
+      acc[row.alias] = row;
+      return acc;
+    }, {}),
+  );
+}
+
+// fine grained subscription
+function UptimeComponent({ alias }: { alias: string }) {
+  const uptime = uptimeStore.uptimeByAlias[alias]?.uptime.use();
+  return <div>Uptime: {uptime ?? "Unknown"}</div>;
+}
+```
+
+### 3) Dynamic object keys for editable maps
+
+```tsx
+type HeaderState = {
+  headers: Record<string, string>;
+};
+
+const headerStore = createStore<HeaderState>("route-headers", {
+  headers: {},
+});
+
+function HeadersEditor() {
+  // keys is a virtual property that returns a state proxy for the keys array
+  // it only recomputes when the keys array changes
+  const keys = headerStore.headers.keys.use();
 
   return (
     <div>
-      <input
-        value={query ?? ''}
-        onChange={e => store.searchQuery.set(e.target.value)}
-        placeholder="Search services"
-      />
-      <div>
-        {categories.map(name => (
-          <button
-            key={name}
-            data-active={name === activeCategory}
-            onClick={() => setActiveCategory(name)}
-          >
-            {name}
+      {keys.map((key) => (
+        <div key={key}>
+          <input
+            value={key}
+            onChange={(e) =>
+              headerStore.headers.rename(key, e.target.value.trim())
+            }
+          />
+          {/* Render and update without cascade rerendering the entire HeadersEditor */}
+          <RenderWithUpdate state={headerStore.headers[key]}>
+            {(value, update) => (
+              <input value={value} onChange={(e) => update(e.target.value)} />
+            )}
+          </RenderWithUpdate>
+          <button onClick={() => headerStore.headers[key].reset()}>
+            remove
           </button>
-        ))}
-      </div>
-      <ul>
-        {visibleItems.map(item => (
-          <li key={item.name}>{item.name}</li>
-        ))}
-      </ul>
+        </div>
+      ))}
     </div>
-  )
+  );
 }
 ```
 
-### Live route uptime sidebar
+### 4) Typed form with validation and submit gating
 
 ```tsx
-import { useWebSocketApi } from '@/hooks/websocket'
-import type { RouteKey } from '@/components/routes/store'
-import { store } from '@/components/routes/store'
-import type { RouteUptimeAggregate, UptimeAggregate } from '@/lib/api'
-
-function RoutesUptimeProvider() {
-  useWebSocketApi<UptimeAggregate>({
-    endpoint: '/metrics/uptime',
-    query: { period: '1d' },
-    onMessage: uptime => {
-      const keys = uptime.data.map(route => route.alias as RouteKey)
-      store.set('routeKeys', keys.toSorted())
-      store.set(
-        'uptime',
-        keys.reduce(
-          (acc, key, index) => {
-            acc[key] = uptime.data[index] as RouteUptimeAggregate
-            return acc
-          },
-          {} as Record<RouteKey, RouteUptimeAggregate>
-        )
-      )
-    }
-  })
-
-  return null
-}
-```
-
-### Server metrics via WebSockets
-
-```tsx
-import { useWebSocketApi } from '@/hooks/websocket'
-import { store } from '@/components/servers/store'
-import type { MetricsPeriod, SystemInfoAggregate, SystemInfoAggregateMode } from '@/lib/api'
-
-const MODES: SystemInfoAggregateMode[] = [
-  'cpu_average',
-  'memory_usage',
-  'disks_read_speed',
-  'disks_write_speed',
-  'disks_iops',
-  'disk_usage',
-  'network_speed',
-  'network_transfer',
-  'sensor_temperature'
-]
-
-function SystemInfoGraphsProvider({ agent, period }: { agent: string; period: MetricsPeriod }) {
-  MODES.forEach(mode => {
-    useWebSocketApi<SystemInfoAggregate>({
-      endpoint: '/metrics/system_info',
-      query: {
-        period,
-        aggregate: mode,
-        agent_name: agent === 'Main Server' ? '' : agent
-      },
-      onMessage: data => {
-        store.systemInfoGraphs[agent]?.[period]?.[mode]?.set(data)
-      }
-    })
-  })
-
-  return null
-}
-```
-
-## Usage
-
-### Reading State
-
-```tsx
-function UserName() {
-  // Subscribe to a specific path - re-renders only when this value changes
-  const name = store.user.name.use()
-  return <span>{name}</span>
-}
-
-function Theme() {
-  // Deep path access
-  const theme = store.user.preferences.theme.use()
-  return <span>Current theme: {theme}</span>
-}
-```
-
-### Writing State
-
-```tsx
-function Settings() {
-  return <button onClick={() => store.user.preferences.theme.set('dark')}>Dark Mode</button>
-}
-
-// Functional updates
-store.user.name.set(prev => prev.toUpperCase())
-
-// Read without subscribing
-const currentName = store.user.name.value
-```
-
-### useState-style Hook
-
-```tsx
-function EditableName() {
-  const [name, setName] = store.user.name.useState()
-  return <input value={name ?? ''} onChange={e => setName(e.target.value)} />
-}
-```
-
-### Debounced Values
-
-```tsx
-function SearchResults() {
-  // Value updates are debounced by 300ms
-  const query = store.search.query.useDebounce(300)
-  // fetch results based on debounced query...
-}
-```
-
-### Array Operations
-
-```tsx
-function TodoList() {
-  const todos = store.todos.use()
-
-  const addTodo = () => {
-    store.todos.push({ id: Date.now(), text: 'New todo', done: false })
-  }
-
-  const removeFirst = () => {
-    store.todos.shift()
-  }
-
-  const toggleTodo = (index: number) => {
-    store.todos.at(index).done.set(prev => !prev)
-  }
-
-  return (
-    <ul>
-      {todos?.map((todo, i) => (
-        <li key={todo.id} onClick={() => toggleTodo(i)}>
-          {todo.text}
-        </li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Available array methods: `push`, `pop`, `shift`, `unshift`, `splice`, `reverse`, `sort`, `fill`, `copyWithin`, `sortedInsert`.
-
-### Render Props
-
-```tsx
-function Counter() {
-  return (
-    <store.counter.Render>
-      {(value, update) => (
-        <button onClick={() => update((value ?? 0) + 1)}>Count: {value ?? 0}</button>
-      )}
-    </store.counter.Render>
-  )
-}
-```
-
-### Conditional Rendering
-
-```tsx
-function AdminPanel() {
-  return (
-    <store.user.role.Show on={role => role === 'admin'}>
-      <AdminDashboard />
-    </store.user.role.Show>
-  )
-}
-```
-
-### Derived State
-
-Transform values without storing the transformed version:
-
-```tsx
-function TemperatureInput() {
-  // Store holds Celsius, but we want to display/edit Fahrenheit
-  const fahrenheit = store.temperature.derived({
-    from: celsius => ((celsius ?? 0) * 9) / 5 + 32,
-    to: fahrenheit => ((fahrenheit - 32) * 5) / 9
-  })
-
-  const [temp, setTemp] = fahrenheit.useState()
-  return <input type="number" value={temp} onChange={e => setTemp(Number(e.target.value))} />
-}
-```
-
-### Computed Values
-
-```tsx
-function TotalPrice() {
-  const total = store.cart.items.useCompute(
-    items => items?.reduce((sum, item) => sum + item.price * item.qty, 0) ?? 0
-  )
-  return <span>Total: ${total}</span>
-}
-```
-
-### Memory-Only Stores
-
-For complex component-local state with nested structures. Useful when you need to pass state to child components without prop drilling:
-
-```tsx
-import { useMemoryStore, type MemoryStore } from 'juststore'
-
-type SearchState = {
-  query: string
-  filters: { category: string; minPrice: number }
-  results: { id: number; name: string }[]
-}
-
-function ProductSearch() {
-  const state = useMemoryStore<SearchState>({
-    query: '',
-    filters: { category: 'all', minPrice: 0 },
-    results: []
-  })
-
-  return (
-    <>
-      <SearchInput state={state} />
-      <FilterPanel state={state} />
-      <ResultsList state={state} />
-    </>
-  )
-}
-
-function SearchInput({ state }: { state: MemoryStore<SearchState> }) {
-  const query = state.query.use()
-  return <input value={query} onChange={e => state.query.set(e.target.value)} />
-}
-
-function FilterPanel({ state }: { state: MemoryStore<SearchState> }) {
-  const category = state.filters.category.use()
-  return (
-    <select value={category} onChange={e => state.filters.category.set(e.target.value)}>
-      <option value="all">All</option>
-      <option value="electronics">Electronics</option>
-    </select>
-  )
-}
-
-function ResultsList({ state }: { state: MemoryStore<SearchState> }) {
-  const results = state.results.use()
-  return (
-    <ul>
-      {results?.map(r => (
-        <li key={r.id}>{r.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-### Form Handling
-
-```tsx
-import { useForm } from 'juststore'
+import { useForm } from "juststore";
+import {
+  StoreFormInputField,
+  StoreFormPasswordField,
+} from "@/components/store/Input"; // from juststore-shadcn
 
 type LoginForm = {
-  email: string
-  password: string
-}
+  email: string;
+  password: string;
+};
 
 function LoginPage() {
   const form = useForm<LoginForm>(
-    { email: '', password: '' },
+    { email: "", password: "" },
     {
-      email: { validate: 'not-empty' },
+      email: { validate: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
       password: {
-        validate: value => (value && value.length < 8 ? 'Password too short' : undefined)
-      }
-    }
-  )
+        validate: (value) =>
+          value && value.length < 8 ? "Password too short" : undefined,
+      },
+    },
+  );
 
   return (
-    <form onSubmit={form.handleSubmit(values => console.log(values))}>
-      <input value={form.email.use() ?? ''} onChange={e => form.email.set(e.target.value)} />
-      {form.email.useError() && <span>{form.email.error}</span>}
-
-      <input
-        type="password"
-        value={form.password.use() ?? ''}
-        onChange={e => form.password.set(e.target.value)}
+    <form onSubmit={form.handleSubmit((values) => console.log(values))}>
+      <StoreFormInputField
+        state={form.email}
+        type="email"
+        title="Email"
+        placeholder="you@example.com"
       />
-      {form.password.useError() && <span>{form.password.error}</span>}
-
-      <button type="submit">Login</button>
+      <StoreFormPasswordField
+        state={form.password}
+        title="Password"
+        placeholder="At least 8 characters"
+      />
+      <button type="submit">Sign in</button>
     </form>
-  )
+  );
 }
 ```
 
-Validation options:
-
-- `'not-empty'` - Field must have a value
-- `RegExp` - Value must match the pattern
-- `(value, form) => string | undefined` - Custom validation function
-
-### Mixed State
-
-Combine multiple state values into a single subscription:
+### 5) Mixed read model for unified UI flags
 
 ```tsx
-import { createMixedState } from 'juststore'
+import { createMixedState, createStore } from "juststore";
 
-function LoadingOverlay() {
-  const loading = createMixedState(store.saving, store.fetching, store.uploading)
+type OpsState = {
+  syncingConfig: boolean;
+  savingRoute: boolean;
+  reloadingAgent: boolean;
+};
 
-  return (
-    <loading.Show on={([saving, fetching, uploading]) => saving || fetching || uploading}>
-      <Spinner />
-    </loading.Show>
-  )
+const opsStore = createStore<OpsState>("ops", {
+  syncingConfig: false,
+  savingRoute: false,
+  reloadingAgent: false,
+});
+
+const busyState = createMixedState(
+  opsStore.syncingConfig,
+  opsStore.savingRoute,
+  opsStore.reloadingAgent,
+);
+
+function GlobalBusyOverlay() {
+  const isBusy = busyState.useCompute(
+    ([syncingConfig, savingRoute, reloadingAgent]) =>
+      syncingConfig || savingRoute || reloadingAgent,
+  );
+
+  if (!isBusy) return null;
+  return <div className="overlay">Loading...</div>;
+}
+
+function BusyLabel() {
+  const label = busyState.useCompute(
+    ([syncingConfig, savingRoute, reloadingAgent]) => {
+      if (syncingConfig) return "Syncing config...";
+      if (savingRoute) return "Saving route...";
+      if (reloadingAgent) return "Reloading agent...";
+      return "Idle";
+    },
+  );
+
+  return <span>{label}</span>;
 }
 ```
 
-### Path-based API
+## Core Usage
 
-The store also exposes a path-based API for dynamic access:
+### Read and write state
 
 ```tsx
-// Equivalent to store.user.name.use()
-const name = store.use('user.name')
+const name = store.user.name.use(); // subscribe
+const current = store.user.name.value; // read without subscribe
+store.user.name.set("Alice");
+store.user.name.set((prev) => prev.toUpperCase());
+```
 
-// Equivalent to store.user.name.set('Alice')
-store.set('user.name', 'Alice')
+### Path-based dynamic API
 
-// Equivalent to store.user.name.value
-const current = store.value('user.name')
+```tsx
+store.set("user.name", "Alice");
+const name = store.use("user.name");
+const value = store.value("user.name");
+```
+
+### Arrays
+
+```tsx
+store.todos.push({ id: Date.now(), text: "new", done: false });
+store.todos.at(0).done.set(true);
+store.todos.sortedInsert((a, b) => a.id - b.id, {
+  id: 2,
+  text: "x",
+  done: false,
+});
+
+const len = store.todos.length;
+const liveLen = store.todos.useLength();
+```
+
+### Computed and derived values
+
+```tsx
+const total = store.cart.items.useCompute(
+  (items) => items?.reduce((sum, item) => sum + item.price * item.qty, 0) ?? 0,
+);
+
+const fahrenheit = store.temperature.derived({
+  from: (celsius) => ((celsius ?? 0) * 9) / 5 + 32,
+  to: (f) => ((f - 32) * 5) / 9,
+});
+```
+
+### Render helpers
+
+```tsx
+import { Conditional, Render, RenderWithUpdate } from "juststore";
+
+<Render state={store.counter}>{(value) => <span>{value}</span>}</Render>;
+
+<RenderWithUpdate state={store.counter}>
+  {(value, update) => (
+    <button onClick={() => update((value ?? 0) + 1)}>{value}</button>
+  )}
+</RenderWithUpdate>;
+
+<Conditional state={store.user.role} on={(role) => role === "admin"}>
+  {(role) => <div>{role}</div>}
+</Conditional>;
 ```
 
 ## API Reference
 
-### createStore(namespace, defaultValue, options?)
+## Top-Level Exports
 
-Creates a persistent store with localStorage backing and cross-tab sync.
+- `createStore(namespace, defaultValue, options?)`
+- `createMemoryStore(namespace, defaultValue)`
+- `useMemoryStore(defaultValue)`
+- `createForm(namespace, defaultValue, fieldConfigs?)`
+- `useForm(defaultValue, fieldConfigs?)`
+- `createMixedState(...states)`
+- `createAtom(id, defaultValue, persistent?)`
+- `Render`, `RenderWithUpdate`, `Conditional`
+- `isEqual`
+- All public types from `path`, `types`, and `form`
 
-- `namespace` - Unique identifier for the store
-- `defaultValue` - Initial state shape
-- `options.memoryOnly` - Disable persistence (default: false)
+### `createStore(namespace, defaultValue, options?)`
 
-### useMemoryStore(defaultValue)
+Creates a persistent store (unless `options.memoryOnly` is true).
 
-Creates a component-scoped store that doesn't persist.
+- `namespace: string` - storage namespace
+- `defaultValue: T` - default root value
+- `options?: { memoryOnly?: boolean }`
 
-### useForm(defaultValue, fieldConfigs?)
+Returns a store that supports both:
 
-Creates a form store with validation support.
+- deep proxy usage (`store.user.name.use()`)
+- path-based usage (`store.use("user.name")`)
 
-### Root Node Methods
+### `createMemoryStore(namespace, defaultValue)` / `useMemoryStore(defaultValue)`
 
-The store root provides path-based methods for dynamic access:
+Creates memory-only stores (no localStorage persistence).
 
-| Method                          | Description                                             |
-| ------------------------------- | ------------------------------------------------------- |
-| `.state(path)`                  | Get the state object for a path                         |
-| `.use(path)`                    | Subscribe and read value (triggers re-render on change) |
-| `.useDebounce(path, ms)`        | Subscribe with debounced updates                        |
-| `.useState(path)`               | Returns `[value, setValue]` tuple                       |
-| `.value(path)`                  | Read without subscribing                                |
-| `.set(path, value)`             | Update value                                            |
-| `.set(path, fn)`                | Functional update                                       |
-| `.reset(path)`                  | Delete value at path                                    |
-| `.rename(path, oldKey, newKey)` | Rename a key in an object                               |
-| `.keys(path)`                   | Get the readonly state of keys of an object             |
-| `.subscribe(path, fn)`          | Subscribe to changes (for effects)                      |
-| `.notify(path)`                 | Manually trigger subscribers                            |
-| `.useCompute(path, fn)`         | Derive a computed value                                 |
-| `.Render({ path, children })`   | Render prop component                                   |
-| `.Show({ path, children, on })` | Conditional render component                            |
+- `createMemoryStore` is useful outside React hooks or for explicit namespaces
+- `useMemoryStore` creates component-scoped state keyed by `useId()`
 
-### Common State Methods
+### `createAtom(id, defaultValue, persistent?)`
 
-Available on all state types (values, objects, arrays):
+Creates a scalar atom-like state.
 
-| Method                       | Description                                                         |
-| ---------------------------- | ------------------------------------------------------------------- |
-| `.value`                     | Read without subscribing                                            |
-| `.field`                     | The field name for the proxy                                        |
-| `.use()`                     | Subscribe and read value (triggers re-render on change)             |
-| `.useDebounce(ms)`           | Subscribe with debounced updates                                    |
-| `.useState()`                | Returns `[value, setValue]` tuple                                   |
-| `.set(value)`                | Update value                                                        |
-| `.set(fn)`                   | Functional update                                                   |
-| `.reset()`                   | Delete value at path                                                |
-| `.subscribe(fn)`             | Subscribe to changes (for effects)                                  |
-| `.notify()`                  | Manually trigger subscribers                                        |
-| `.useCompute(fn)`            | Derive a computed value                                             |
-| `.derived({ from, to })`     | Create bidirectional transform                                      |
-| `.ensureArray()`             | Get array state for the value                                       |
-| `.ensureObject()`            | Get object state for the value                                      |
-| `.withDefault(defaultValue)` | Return a new state with a default value, and make the type non-nullable |
-| `.Render({ children })`      | Render prop component                                               |
-| `.Show({ children, on })`    | Conditional render component                                        |
+- `persistent` defaults to `false`
+- methods: `.value`, `.use()`, `.set(value | updater)`, `.reset()`, `.subscribe(listener)`
 
-### Object State Methods
+### `createForm(namespace, defaultValue, fieldConfigs?)` / `useForm(defaultValue, fieldConfigs?)`
 
-Additional methods available on object states:
+Creates a form store with built-in error state and validation.
 
-| Method                    | Description                                           |
-| ------------------------- | ----------------------------------------------------- |
-| `.keys`                   | Readonly state of object keys                         |
-| `.rename(oldKey, newKey)` | Rename a key in an object                             |
-| `[key: string]`           | Access nested property state by key                   |
+Field validators support:
 
-### Array State Methods
+- `"not-empty"`
+- `RegExp`
+- `(value, form) => string | undefined`
 
-Additional methods available on array states:
+Additional form methods:
 
-| Method                   | Description                                                                       |
-| ------------------------ | --------------------------------------------------------------------------------- |
-| `.length`                | Read the array length without subscribing                                         |
-| `.useLength()`           | Subscribe to array length changes                                                 |
-| `.push(...items)`        | Add items to the end                                                              |
-| `.pop()`                 | Remove and return the last item                                                   |
-| `.shift()`               | Remove and return the first item                                                  |
-| `.unshift(...items)`     | Add items to the beginning                                                        |
-| `.splice(start, deleteCount, ...items)` | Remove/replace items                                      |
-| `.reverse()`             | Reverse the array in place                                                        |
-| `.sort(compareFn)`       | Sort the array in place                                                           |
-| `.fill(value, start, end)` | Fill the array with a value                                                    |
-| `.copyWithin(target, start, end)` | Copy part of the array within itself                                 |
-| `.sortedInsert(cmp, ...items)` | Insert items in sorted order using comparison function                      |
-| `.at(index)`             | Access element at index (returns proxy)                                           |
-| `[index: number]`        | Access element at index (returns proxy)                                           |
+- `.useError()`
+- `.error`
+- `.setError(message | undefined)`
+- `.clearErrors()`
+- `.handleSubmit(onSubmit)`
+
+### `createMixedState(...states)`
+
+Combines multiple states into one read-only tuple-like state.
+
+- `.value` returns current tuple
+- `.use()` subscribes to all source states
+- `.useCompute(fn)` computes derived values from the tuple
+
+### Render utilities
+
+- `Render` - render-prop helper for read-only usage
+- `RenderWithUpdate` - render-prop helper with updater callback
+- `Conditional` - conditional render helper based on predicate
+
+## Store / State Methods
+
+### Root store methods
+
+| Method                           | Description                                     |
+| -------------------------------- | ----------------------------------------------- |
+| `.state(path)`                   | Returns a state proxy for the path              |
+| `.use(path)`                     | Subscribes and returns current value            |
+| `.useDebounce(path, delay)`      | Debounced subscription                          |
+| `.useState(path)`                | `[value, setValue]` convenience tuple           |
+| `.value(path)`                   | Reads current value without subscription        |
+| `.set(path, value, skipUpdate?)` | Sets value (or updater function)                |
+| `.reset(path)`                   | Resets path back to default value for that path |
+| `.rename(path, oldKey, newKey)`  | Renames an object key                           |
+| `.subscribe(path, listener)`     | Subscribes to path updates                      |
+| `.useCompute(path, fn, deps?)`   | Computes memoized derived values                |
+| `.notify(path)`                  | Forces listener notification for path           |
+
+### Common state-node methods
+
+Available on all nodes (`store.a.b.c`):
+
+| Method                       | Description                     |
+| ---------------------------- | ------------------------------- |
+| `.value`                     | Read value without subscribing  |
+| `.field`                     | Last path segment               |
+| `.use()`                     | Subscribe and read              |
+| `.useDebounce(delay)`        | Debounced subscribe/read        |
+| `.useState()`                | `[value, setValue]`             |
+| `.set(value, skipUpdate?)`   | Set value (or updater function) |
+| `.reset()`                   | Reset path to default value     |
+| `.subscribe(listener)`       | Subscribe to path changes       |
+| `.useCompute(fn, deps?)`     | Compute derived value           |
+| `.derived({ from, to })`     | Bidirectional virtual transform |
+| `.ensureArray()`             | Array-safe state wrapper        |
+| `.ensureObject()`            | Object-safe state wrapper       |
+| `.withDefault(defaultValue)` | Fallback for nullish values     |
+| `.notify()`                  | Forces listener notification    |
+
+### Object-state additions
+
+| Method                    | Description                 |
+| ------------------------- | --------------------------- |
+| `.keys`                   | Read-only stable keys state |
+| `.rename(oldKey, newKey)` | Rename object key           |
+| `[key]`                   | Nested field access         |
+
+### Array-state additions
+
+| Method                                   | Description              |
+| ---------------------------------------- | ------------------------ |
+| `.length`                                | Current length           |
+| `.useLength()`                           | Subscribe to length only |
+| `.at(index)` / `[index]`                 | Access item state        |
+| `.push(...items)`                        | Push items               |
+| `.pop()`                                 | Pop item                 |
+| `.shift()`                               | Shift item               |
+| `.unshift(...items)`                     | Unshift items            |
+| `.splice(start, deleteCount?, ...items)` | Splice items             |
+| `.reverse()`                             | Reverse array            |
+| `.sort(compareFn?)`                      | Sort array               |
+| `.fill(value, start?, end?)`             | Fill array               |
+| `.copyWithin(target, start, end?)`       | Copy within array        |
+| `.sortedInsert(cmp, ...items)`           | Insert by comparator     |
+
+## Notes
+
+- `createStore` persists by default; use `memoryOnly` for ephemeral data.
+- `reset` restores default path value passed to `createStore`, it does not delete to `undefined`.
 
 ## License
 
