@@ -21,25 +21,15 @@
     }
   },
   "sideEffects": false,
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "license": "AGPL-3.0-only",
-  "keywords": [
-    "state",
-    "react",
-    "typescript",
-    "hooks",
-    "store",
-    "state management",
-    "react hooks"
-  ],
+  "keywords": ["state", "react", "typescript", "hooks", "store", "state management", "react hooks"],
   "scripts": {
     "build": "bun --bun tsc",
     "typecheck": "bun --bun tsc --noEmit",
-    "lint": "bun --bun biome check",
-    "format": "bun --bun biome format --write",
-    "format:check": "bun --bun biome format",
+    "lint": "biome check",
+    "format": "biome format --write",
+    "format:check": "biome format",
     "prepublishOnly": "bun run build",
     "publish": "npm publish --access public",
     "prepare": "husky"
@@ -52,9 +42,9 @@
     "react-fast-compare": "^3.2.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.2",
+    "@biomejs/biome": "^2.4.6",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.4.0",
     "@types/react": "^19.2.14",
     "husky": "^9.1.7",
     "react": "^19.2.4",
