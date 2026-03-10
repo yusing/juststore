@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
+import { createStore } from '../src'
 import {
   getSnapshot,
   getStableKeys,
@@ -57,4 +58,30 @@ test('empty segment in path is treated as object key, not array index', () => {
 
   // Reading the same path should work
   expect(getSnapshot(`${root}.providers.docker.`, true)).toEqual({})
+})
+
+test('createStore deep merges nested defaults with existing persisted state', () => {
+  produce(
+    'homepage',
+    {
+      systemInfo: {
+        uptime: 15782,
+        cpuAverage: 3.15
+      }
+    },
+    false,
+    false
+  )
+
+  const store = createStore('homepage', {
+    systemInfo: {
+      uptime: 0,
+      cpuAverage: 0,
+      secondDriveOptions: [] as string[]
+    }
+  })
+
+  expect(store.systemInfo.uptime.value).toBe(15782)
+  expect(store.systemInfo.cpuAverage.value).toBe(3.15)
+  expect(store.systemInfo.secondDriveOptions.value).toEqual([])
 })

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import {
   getNestedValue,
   getSnapshot,
+  isRecord,
   joinPath,
   notifyListeners,
   produce,
@@ -47,7 +48,12 @@ function createStoreRoot<T extends FieldValues>(
 
   const memoryOnly = options?.memoryOnly ?? false
   // merge with default value and save in memory only
-  produce(namespace, { ...defaultValue, ...(getSnapshot(namespace, memoryOnly) ?? {}) }, true, true)
+  produce(
+    namespace,
+    mergeWithDefaults(defaultValue, getSnapshot(namespace, memoryOnly)),
+    true,
+    true
+  )
 
   const storeApi: StoreRoot<T> = {
     state: <P extends FieldPath<T>>(path: P) => createRootNode(storeApi, path),
@@ -119,4 +125,24 @@ function createStoreRoot<T extends FieldValues>(
   }
 
   return storeApi
+}
+
+function mergeWithDefaults<T>(defaultValue: T, existingValue: unknown): T {
+  if (existingValue === undefined) {
+    return defaultValue
+  }
+
+  if (!isRecord(defaultValue) || !isRecord(existingValue)) {
+    return existingValue as T
+  }
+
+  const defaults = defaultValue as Record<string, unknown>
+  const existing = existingValue as Record<string, unknown>
+  const merged: Record<string, unknown> = { ...existing }
+
+  for (const key of Object.keys(defaults)) {
+    merged[key] = mergeWithDefaults(defaults[key], existing[key])
+  }
+
+  return merged as T
 }
