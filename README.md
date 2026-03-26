@@ -21,56 +21,56 @@ bun add juststore
 ## Quick Start
 
 ```tsx
-import { createStore } from "juststore";
-import { toast } from "sonner";
+import { createStore } from 'juststore'
+import { toast } from 'sonner'
 
 type AppState = {
   user: {
-    name: string;
+    name: string
     preferences: {
-      theme: "light" | "dark";
-    };
-  };
-  todos: { id: number; text: string; done: boolean }[];
-};
+      theme: 'light' | 'dark'
+    }
+  }
+  todos: { id: number; text: string; done: boolean }[]
+}
 
-const store = createStore<AppState>("app", {
+const store = createStore<AppState>('app', {
   user: {
-    name: "Guest",
-    preferences: { theme: "light" },
+    name: 'Guest',
+    preferences: { theme: 'light' }
   },
-  todos: [],
-});
+  todos: []
+})
 
 async function initUserDetails() {
-  const response = await fetch("/api/user/details");
-  const data = (await response.json()) as AppState["user"];
-  store.user.set(data);
+  const response = await fetch('/api/user/details')
+  const data = (await response.json()) as AppState['user']
+  store.user.set(data)
 }
 
 function ThemeToggle() {
-  const theme = store.user.preferences.theme.use();
-  const nextTheme = theme === "light" ? "dark" : "light";
+  const theme = store.user.preferences.theme.use()
+  const nextTheme = theme === 'light' ? 'dark' : 'light'
 
   const updateTheme = async () => {
     try {
-      const response = await fetch("/api/user/preferences/theme", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: nextTheme }),
-      });
+      const response = await fetch('/api/user/preferences/theme', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: nextTheme })
+      })
 
       if (!response.ok) {
-        throw new Error("Theme update failed");
+        throw new Error('Theme update failed')
       }
 
-      store.user.preferences.theme.set(nextTheme);
+      store.user.preferences.theme.set(nextTheme)
     } catch {
-      toast.error("Failed to update theme");
+      toast.error('Failed to update theme')
     }
-  };
+  }
 
-  return <button onClick={updateTheme}>Theme: {theme}</button>;
+  return <button onClick={updateTheme}>Theme: {theme}</button>
 }
 ```
 
@@ -80,70 +80,65 @@ function ThemeToggle() {
 
 ```tsx
 type SearchState = {
-  query: string;
-  category: "all" | "running" | "stopped";
-  services: { id: string; name: string; status: "running" | "stopped" }[];
-};
+  query: string
+  category: 'all' | 'running' | 'stopped'
+  services: { id: string; name: string; status: 'running' | 'stopped' }[]
+}
 
-const searchStore = createStore<SearchState>("services-search", {
-  query: "",
-  category: "all",
-  services: [],
-});
+const searchStore = createStore<SearchState>('services-search', {
+  query: '',
+  category: 'all',
+  services: []
+})
 
 function SearchQueryInput() {
-  const query = searchStore.query.use() ?? "";
+  const query = searchStore.query.use() ?? ''
   return (
     <input
       value={query}
-      onChange={(e) => searchStore.query.set(e.target.value)}
+      onChange={e => searchStore.query.set(e.target.value)}
       placeholder="Search services"
     />
-  );
+  )
 }
 
 function SearchCategoryFilter() {
-  const category = searchStore.category.use();
+  const category = searchStore.category.use()
   return (
     <select
       value={category}
-      onChange={(e) =>
-        searchStore.category.set(e.target.value as SearchState["category"])
-      }
+      onChange={e => searchStore.category.set(e.target.value as SearchState['category'])}
     >
       <option value="all">All</option>
       <option value="running">Running</option>
       <option value="stopped">Stopped</option>
     </select>
-  );
+  )
 }
 
 function SearchResults() {
-  const query = searchStore.query.useDebounce(150) ?? "";
-  const category = searchStore.category.use();
+  const query = searchStore.query.useDebounce(150) ?? ''
+  const category = searchStore.category.use()
 
   const visible = searchStore.services.useCompute(
-    (services) => {
-      const list = services ?? [];
-      return list.filter((service) => {
-        const nameMatch = service.name
-          .toLowerCase()
-          .includes(query.toLowerCase());
-        const categoryMatch =
-          category === "all" ? true : service.status === category;
-        return nameMatch && categoryMatch;
-      });
+    services => {
+      const list = services ?? []
+      return list.filter(service => {
+        const nameMatch = service.name.toLowerCase().includes(query.toLowerCase())
+        const categoryMatch = category === 'all' ? true : service.status === category
+        return nameMatch && categoryMatch
+      })
     },
-    [query, category],
-  );
+    [query, category]
+  )
 
   return (
     <ul>
-      {visible.map((service) => (
+      {visible.map(service => (
         <li key={service.id}>{service.name}</li>
       ))}
     </ul>
-  );
+  )
 }
 
 function ServiceSearchPage() {
@@ -153,40 +148,40 @@ function ServiceSearchPage() {
       <SearchCategoryFilter />
       <SearchResults />
     </>
-  );
+  )
 }
 ```
 
 ### 2) WebSocket ingestion into normalized state
 
 ```tsx
-type RouteUptime = { alias: string; uptime: number };
+type RouteUptime = { alias: string; uptime: number }
 type UptimeState = {
-  routeKeys: string[];
-  uptimeByAlias: Record<string, RouteUptime>;
-};
+  routeKeys: string[]
+  uptimeByAlias: Record<string, RouteUptime>
+}
 
-const uptimeStore = createStore<UptimeState>("uptime", {
+const uptimeStore = createStore<UptimeState>('uptime', {
   routeKeys: [],
-  uptimeByAlias: {},
-});
+  uptimeByAlias: {}
+})
 
 function onUptimeMessage(rows: RouteUptime[]) {
-  const keys = rows.map((row) => row.alias).toSorted();
-  uptimeStore.routeKeys.set(keys);
+  const keys = rows.map(row => row.alias).toSorted()
+  uptimeStore.routeKeys.set(keys)
 
   uptimeStore.uptimeByAlias.set(
     rows.reduce<Record<string, RouteUptime>>((acc, row) => {
-      acc[row.alias] = row;
-      return acc;
-    }, {}),
-  );
+      acc[row.alias] = row
+      return acc
+    }, {})
+  )
 }
 
 // fine grained subscription
 function UptimeComponent({ alias }: { alias: string }) {
-  const uptime = uptimeStore.uptimeByAlias[alias]?.uptime.use();
-  return <div>Uptime: {uptime ?? "Unknown"}</div>;
+  const uptime = uptimeStore.uptimeByAlias[alias]?.uptime.use()
+  return <div>Uptime: {uptime ?? 'Unknown'}</div>
 }
 ```
 
@@ -194,72 +189,62 @@ function UptimeComponent({ alias }: { alias: string }) {
 
 ```tsx
 type HeaderState = {
-  headers: Record<string, string>;
-};
+  headers: Record<string, string>
+}
 
-const headerStore = createStore<HeaderState>("route-headers", {
-  headers: {},
-});
+const headerStore = createStore<HeaderState>('route-headers', {
+  headers: {}
+})
 
 function HeadersEditor() {
   // keys is a virtual property that returns a state proxy for the keys array
   // it only recomputes when the keys array changes
-  const keys = headerStore.headers.keys.use();
+  const keys = headerStore.headers.keys.use()
 
   return (
     <div>
-      {keys.map((key) => (
+      {keys.map(key => (
         <div key={key}>
           <input
             value={key}
-            onChange={(e) =>
-              headerStore.headers.rename(key, e.target.value.trim())
-            }
+            onChange={e => headerStore.headers.rename(key, e.target.value.trim())}
           />
           {/* Render and update without cascade rerendering the entire HeadersEditor */}
           <RenderWithUpdate state={headerStore.headers[key]}>
-            {(value, update) => (
-              <input value={value} onChange={(e) => update(e.target.value)} />
-            )}
+            {(value, update) => <input value={value} onChange={e => update(e.target.value)} />}
           </RenderWithUpdate>
-          <button onClick={() => headerStore.headers[key].reset()}>
-            remove
-          </button>
+          <button onClick={() => headerStore.headers[key].reset()}>remove</button>
         </div>
       ))}
     </div>
-  );
+  )
 }
 ```
 
 ### 4) Typed form with validation and submit gating
 
 ```tsx
-import { useForm } from "juststore";
-import {
-  StoreFormInputField,
-  StoreFormPasswordField,
-} from "@/components/store/Input"; // from juststore-shadcn
+import { useForm } from 'juststore'
+import { StoreFormInputField, StoreFormPasswordField } from '@/components/store/Input' // from juststore-shadcn
 
 type LoginForm = {
-  email: string;
-  password: string;
-};
+  email: string
+  password: string
+}
 
 function LoginPage() {
   const form = useForm<LoginForm>(
-    { email: "", password: "" },
+    { email: '', password: '' },
     {
       email: { validate: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
       password: {
-        validate: (value) =>
-          value && value.length < 8 ? "Password too short" : undefined,
-      },
-    },
-  );
+        validate: value => (value && value.length < 8 ? 'Password too short' : undefined)
+      }
+    }
+  )
 
   return (
-    <form onSubmit={form.handleSubmit((values) => console.log(values))}>
+    <form onSubmit={form.handleSubmit(values => console.log(values))}>
       <StoreFormInputField
         state={form.email}
         type="email"
@@ -273,54 +258,51 @@ function LoginPage() {
       />
       <button type="submit">Sign in</button>
     </form>
-  );
+  )
 }
 ```
 
 ### 5) Mixed read model for unified UI flags
 
 ```tsx
-import { createMixedState, createStore } from "juststore";
+import { createMixedState, createStore } from 'juststore'
 
 type OpsState = {
-  syncingConfig: boolean;
-  savingRoute: boolean;
-  reloadingAgent: boolean;
-};
+  syncingConfig: boolean
+  savingRoute: boolean
+  reloadingAgent: boolean
+}
 
-const opsStore = createStore<OpsState>("ops", {
+const opsStore = createStore<OpsState>('ops', {
   syncingConfig: false,
   savingRoute: false,
-  reloadingAgent: false,
-});
+  reloadingAgent: false
+})
 
 const busyState = createMixedState(
   opsStore.syncingConfig,
   opsStore.savingRoute,
-  opsStore.reloadingAgent,
-);
+  opsStore.reloadingAgent
+)
 
 function GlobalBusyOverlay() {
   const isBusy = busyState.useCompute(
-    ([syncingConfig, savingRoute, reloadingAgent]) =>
-      syncingConfig || savingRoute || reloadingAgent,
-  );
+    ([syncingConfig, savingRoute, reloadingAgent]) => syncingConfig || savingRoute || reloadingAgent
+  )
 
-  if (!isBusy) return null;
-  return <div className="overlay">Loading...</div>;
+  if (!isBusy) return null
+  return <div className="overlay">Loading...</div>
 }
 
 function BusyLabel() {
-  const label = busyState.useCompute(
-    ([syncingConfig, savingRoute, reloadingAgent]) => {
-      if (syncingConfig) return "Syncing config...";
-      if (savingRoute) return "Saving route...";
-      if (reloadingAgent) return "Reloading agent...";
-      return "Idle";
-    },
-  );
+  const label = busyState.useCompute(([syncingConfig, savingRoute, reloadingAgent]) => {
+    if (syncingConfig) return 'Syncing config...'
+    if (savingRoute) return 'Saving route...'
+    if (reloadingAgent) return 'Reloading agent...'
+    return 'Idle'
+  })
 
-  return <span>{label}</span>;
+  return <span>{label}</span>
 }
 ```
 
@@ -329,64 +311,59 @@ function BusyLabel() {
 ### Read and write state
 
 ```tsx
-const name = store.user.name.use(); // subscribe
-const current = store.user.name.value; // read without subscribe
-store.user.name.set("Alice");
-store.user.name.set((prev) => prev.toUpperCase());
+const name = store.user.name.use() // subscribe
+const current = store.user.name.value // read without subscribe
+store.user.name.set('Alice')
+store.user.name.set(prev => prev.toUpperCase())
 ```
 
 ### Path-based dynamic API
 
 ```tsx
-store.set("user.name", "Alice");
-const name = store.use("user.name");
-const value = store.value("user.name");
+store.set('user.name', 'Alice')
+const name = store.use('user.name')
+const value = store.value('user.name')
 ```
 
 ### Arrays
 
 ```tsx
-store.todos.push({ id: Date.now(), text: "new", done: false });
-store.todos.at(0).done.set(true);
+store.todos.push({ id: Date.now(), text: 'new', done: false })
+store.todos.at(0).done.set(true)
 store.todos.sortedInsert((a, b) => a.id - b.id, {
   id: 2,
-  text: "x",
-  done: false,
-});
+  text: 'x',
+  done: false
+})
 
-const len = store.todos.length;
-const liveLen = store.todos.useLength();
+const len = store.todos.length
+const liveLen = store.todos.useLength()
 ```
 
 ### Computed and derived values
 
 ```tsx
 const total = store.cart.items.useCompute(
-  (items) => items?.reduce((sum, item) => sum + item.price * item.qty, 0) ?? 0,
-);
+  items => items?.reduce((sum, item) => sum + item.price * item.qty, 0) ?? 0
+)
 
 const fahrenheit = store.temperature.derived({
-  from: (celsius) => ((celsius ?? 0) * 9) / 5 + 32,
-  to: (f) => ((f - 32) * 5) / 9,
-});
+  from: celsius => ((celsius ?? 0) * 9) / 5 + 32,
+  to: f => ((f - 32) * 5) / 9
+})
 ```
 
 ### Render helpers
 
 ```tsx
-import { Conditional, Render, RenderWithUpdate } from "juststore";
-
-<Render state={store.counter}>{(value) => <span>{value}</span>}</Render>;
-
-<RenderWithUpdate state={store.counter}>
-  {(value, update) => (
-    <button onClick={() => update((value ?? 0) + 1)}>{value}</button>
-  )}
-</RenderWithUpdate>;
-
-<Conditional state={store.user.role} on={(role) => role === "admin"}>
+import { Conditional, Render, RenderWithUpdate } from 'juststore'
+;<Render state={store.counter}>{value => <span>{value}</span>}</Render>
+;<RenderWithUpdate state={store.counter}>
+  {(value, update) => <button onClick={() => update((value ?? 0) + 1)}>{value}</button>}
+</RenderWithUpdate>
+;<Conditional state={store.user.role} on={role => role === 'admin'}>
   <AdminPage />
-</Conditional>;
+</Conditional>
 ```
 
 ## API Reference
