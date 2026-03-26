@@ -4,7 +4,7 @@ import type { FieldValues } from './path'
 import { createStoreRoot } from './root'
 import type { State, ValueState } from './types'
 
-export { createMemoryStore, useMemoryStore, type MemoryStore }
+export { createMemoryStore, type MemoryStore, useMemoryStore }
 
 /**
  * A component local store with React bindings.

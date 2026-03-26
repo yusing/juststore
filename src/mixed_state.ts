@@ -1,4 +1,3 @@
-import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { isEqual } from './impl'
 import type { ReadOnlyState, ValueState } from './types'

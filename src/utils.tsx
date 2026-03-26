@@ -2,7 +2,7 @@ import { Activity, useCallback } from 'react'
 import type { Atom } from './atom'
 import type { StoreSetStateValue, ValueState } from './types'
 
-export { Render, RenderWithUpdate, Conditional, ConditionalRender }
+export { Conditional, ConditionalRender, Render, RenderWithUpdate }
 
 type AtomLike<T> = Pick<Atom<T> | ValueState<T>, 'use' | 'set' | 'value'>
 type ReadOnlyAtomLike<T> = Pick<Atom<T> | ValueState<T>, 'use' | 'useCompute' | 'value'>

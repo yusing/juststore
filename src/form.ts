@@ -17,15 +17,15 @@ import type {
 } from './types'
 
 export {
-  createForm,
-  useForm,
   type CreateFormOptions,
+  createForm,
   type DeepNonNullable,
   type FormArrayState,
   type FormObjectState,
   type FormState,
   type FormStore,
-  type FormValueState
+  type FormValueState,
+  useForm
 }
 
 /**
@@ -54,7 +54,8 @@ type FormReadOnlyState<T> = Prettify<
 >
 
 interface FormValueState<T>
-  extends Omit<ValueState<T>, 'ensureArray' | 'ensureObject' | 'withDefault' | 'derived'>,
+  extends
+    Omit<ValueState<T>, 'ensureArray' | 'ensureObject' | 'withDefault' | 'derived'>,
     FormCommon {
   /** Ensure the value is an array. */
   ensureArray(): NonNullable<T> extends (infer U)[] ? FormArrayState<U> : never
@@ -190,7 +191,9 @@ function createForm<T extends FieldValues>(
     { memoryOnly: true }
   )
 
-  const storeApi = createStoreRoot<T>(namespace, defaultValue, { memoryOnly: true })
+  const storeApi = createStoreRoot<T>(namespace, defaultValue, {
+    memoryOnly: true
+  })
   const formApi = {
     clearErrors: () => produce(errorNamespace, undefined, false, true),
     handleSubmit: (onSubmit: (value: T) => void) => (e: React.SyntheticEvent) => {

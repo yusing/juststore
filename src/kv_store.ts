@@ -1,7 +1,7 @@
 import { getNestedValue, setNestedValue } from './impl'
 import { localStorageDelete, localStorageGet, localStorageSet } from './local_storage'
 
-export { getNestedValue, KVStore, setNestedValue, type KeyValueStore }
+export { getNestedValue, type KeyValueStore, KVStore, setNestedValue }
 
 type KeyValueStore = {
   getBroadcastChannel: () => BroadcastChannel | undefined
@@ -86,7 +86,11 @@ class KVStore implements KeyValueStore {
 
       // Broadcast change to other tabs
       if (this.broadcastChannel) {
-        this.broadcastChannel.postMessage({ type: 'set', key: rootKey, value: rootValue })
+        this.broadcastChannel.postMessage({
+          type: 'set',
+          key: rootKey,
+          value: rootValue
+        })
       }
     }
   }
@@ -113,7 +117,11 @@ class KVStore implements KeyValueStore {
         if (!this.memoryOnly && typeof window !== 'undefined') {
           localStorageSet(rootKey, updatedRoot)
           if (this.broadcastChannel) {
-            this.broadcastChannel.postMessage({ type: 'set', key: rootKey, value: updatedRoot })
+            this.broadcastChannel.postMessage({
+              type: 'set',
+              key: rootKey,
+              value: updatedRoot
+            })
           }
         }
       }

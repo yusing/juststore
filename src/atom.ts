@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { getSnapshot, updateSnapshot, useCompute } from './impl'
 
-export { createAtom, type Atom }
+export { type Atom, createAtom }
 
 /**
  * An atom is a value that can be subscribed to and updated.

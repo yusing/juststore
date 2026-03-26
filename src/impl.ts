@@ -21,9 +21,9 @@ export {
   subscribe,
   testReset,
   updateSnapshot,
+  useCompute,
   useDebounce,
-  useObject,
-  useCompute
+  useObject
 }
 
 const inMemStorage = new Map<string, unknown>()
