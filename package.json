@@ -2,51 +2,62 @@
   "name": "juststore",
   "version": "1.1.2",
   "description": "A small, expressive, and type-safe state management library for React.",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "keywords": [
+    "hooks",
+    "react",
+    "react hooks",
+    "state",
+    "state management",
+    "store",
+    "typescript"
+  ],
+  "homepage": "https://github.com/yusing/juststore",
+  "bugs": {
+    "url": "https://github.com/yusing/juststore/issues"
+  },
+  "license": "AGPL-3.0-only",
   "author": "Yusing",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yusing/juststore.git"
   },
-  "homepage": "https://github.com/yusing/juststore",
-  "bugs": {
-    "url": "https://github.com/yusing/juststore/issues"
-  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
-  "sideEffects": false,
-  "files": ["dist"],
-  "license": "AGPL-3.0-only",
-  "keywords": ["state", "react", "typescript", "hooks", "store", "state management", "react hooks"],
   "scripts": {
     "build": "bun --bun tsc",
-    "typecheck": "bun --bun tsc --noEmit",
-    "lint": "biome check",
-    "format": "biome format --write",
-    "format:check": "biome format",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt",
+    "lint": "oxlint",
+    "prepare": "husky",
     "prepublishOnly": "bun run build",
-    "prepare": "husky"
-  },
-  "peerDependencies": {
-    "react": ">=18.0.0"
+    "typecheck": "bun --bun tsc --noEmit"
   },
   "dependencies": {
     "change-case": "^5.4.4",
     "react-fast-compare": "^3.2.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.9",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "husky": "^9.1.7",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
     "react": "^19.2.4",
     "typescript": "^6.0.2"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
   }
 }
