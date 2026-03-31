@@ -513,4 +513,4 @@ Available on all nodes (`store.a.b.c`):
 
 ## License
 
-AGPL-3.0
+MIT
