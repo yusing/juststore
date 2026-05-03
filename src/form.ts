@@ -194,19 +194,43 @@ function createForm<T extends FieldValues>(
   const storeApi = createStoreRoot<T>(namespace, defaultValue, {
     memoryOnly: true
   })
+
+  const store = createFormProxy<T>(storeApi, errorStore) as unknown as FormStore<T>
+  const validators = new Map<FieldPath<T>, FunctionValidator<T>>()
+  let proxy: FormStore<T>
+
+  for (const entry of Object.entries(fieldConfigs)) {
+    const [path, config] = entry as [FieldPath<T>, FieldConfig<T>]
+    const validator = getValidator(path, config?.validate)
+    if (validator) {
+      validators.set(path, validator)
+    }
+  }
+
+  const validate = () => {
+    let hasError = false
+    for (const [path, validator] of validators) {
+      const error = validator(storeApi.value(path), proxy)
+      if (error) {
+        errorStore.set(path, error as any)
+        hasError = true
+      }
+    }
+    return !hasError
+  }
+
   const formApi = {
     clearErrors: () => produce(errorNamespace, undefined, false, true),
     handleSubmit: (onSubmit: (value: T) => void) => (e: React.SyntheticEvent) => {
       e.preventDefault()
-      // disable submit if there are errors
-      if (Object.keys(getSnapshot(errorNamespace, true) ?? {}).length === 0) {
+      formApi.clearErrors()
+      if (validate()) {
         onSubmit(getSnapshot(namespace, true) as T)
       }
     }
   }
 
-  const store = createFormProxy<T>(storeApi, errorStore) as unknown as FormStore<T>
-  const proxy = new Proxy(formApi, {
+  proxy = new Proxy(formApi, {
     get(target, prop) {
       if (prop in target) {
         return target[prop as keyof typeof target]
@@ -216,21 +240,16 @@ function createForm<T extends FieldValues>(
   }) as FormStore<T>
 
   const unsubscribeFns: UnsubscribeFns = []
-  for (const entry of Object.entries(fieldConfigs)) {
-    const [path, config] = entry as [FieldPath<T>, FieldConfig<T>]
-    const validator = getValidator(path, config?.validate)
-
-    if (validator) {
-      const unsubscribe = storeApi.subscribe(path, value => {
-        const error = validator(value, store)
-        if (!error) {
-          errorStore.reset(path)
-        } else {
-          errorStore.set(path, error as any)
-        }
-      })
-      unsubscribeFns.push(unsubscribe)
-    }
+  for (const [path, validator] of validators) {
+    const unsubscribe = storeApi.subscribe(path, value => {
+      const error = validator(value, proxy)
+      if (!error) {
+        errorStore.reset(path)
+      } else {
+        errorStore.set(path, error as any)
+      }
+    })
+    unsubscribeFns.push(unsubscribe)
   }
 
   return [proxy, unsubscribeFns]

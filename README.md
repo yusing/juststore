@@ -424,7 +424,8 @@ Additional form methods:
 - `.error`
 - `.setError(message | undefined)`
 - `.clearErrors()`
-- `.handleSubmit(onSubmit)`
+- `.handleSubmit(onSubmit)` — clears stale errors, validates current values, then calls `onSubmit`
+  only when current validation passes
 
 ### `createMixedState(...states)`
 
