@@ -1,7 +1,7 @@
 import { createRootNode } from './node'
 import type { FieldPath, FieldValues } from './path'
 import { createStoreRoot, type StoreOptions } from './root'
-import type { State, StoreRoot } from './types'
+import type { ObjectProxy, StoreRoot } from './types'
 
 export { createStore, type Store }
 
@@ -16,9 +16,7 @@ export { createStore, type Store }
  * - Type-safe paths using FieldPath.
  * - Dynamic deep access via Proxy for ergonomic usage like `store.a.b.c.use()` and `store.a.b.c.set(v)`.
  */
-type Store<T extends FieldValues> = StoreRoot<T> & {
-  [K in keyof T]-?: State<T[K]>
-}
+type Store<T extends FieldValues> = StoreRoot<T> & ObjectProxy<T>
 
 /**
  * Creates a persistent, hierarchical store with localStorage backing and cross-tab synchronization.

@@ -6,7 +6,9 @@ export type {
   ArrayState,
   DerivedStateProps,
   ObjectMutationMethods,
+  ObjectProxy,
   ObjectState,
+  ObjectStateValue,
   Prettify,
   ReadOnlyState,
   State,
@@ -22,6 +24,20 @@ type Prettify<T> = {
 } & {}
 
 type AllowedKeys<T> = Exclude<keyof T, keyof ValueState<unknown> | keyof ObjectMutationMethods>
+
+type MaybeMissingParent<TParent, TValue> = undefined extends TParent
+  ? TValue | undefined
+  : null extends TParent
+    ? TValue | undefined
+    : TValue
+
+type ObjectStateValue<
+  TObject,
+  TNonNullable extends FieldValues,
+  K extends keyof TNonNullable
+> = {} extends TNonNullable
+  ? TNonNullable[K] | undefined
+  : MaybeMissingParent<TObject, TNonNullable[K]>
 
 type ArrayMutationMethods<T> = Prettify<
   Pick<
@@ -51,14 +67,14 @@ type ArrayProxy<T, ElementState = State<T>> = ArrayMutationMethods<NonNullable<T
   sortedInsert(cmp: (a: T, b: T) => number, ...items: T[]): number
 }
 
-type ObjectProxy<T extends FieldValues> = {
+type ObjectProxy<T extends FieldValues, TObject = T> = {
   /** Virtual state for the object's keys.
    *
    * This does NOT read from a real `keys` property on the stored object; it results in a stable array of keys.
    */
   readonly keys: ReadOnlyState<FieldPath<T>[]>
 } & {
-  [K in keyof T]-?: State<T[K]>
+  [K in keyof T]-?: State<ObjectStateValue<TObject, T, K>>
 }
 
 type ObjectMutationMethods = {
@@ -187,10 +203,12 @@ type State<T> =
 type ArrayState<TValue, TArray = TValue[]> =
   IsEqual<TValue, unknown> extends true ? never : ValueState<TArray> & ArrayProxy<TValue>
 
-type ObjectState<
-  TNonNullable extends FieldValues,
-  TObject = TNonNullable
-> = ObjectProxy<TNonNullable> & ValueState<TObject> & ObjectMutationMethods
+type ObjectState<TNonNullable extends FieldValues, TObject = TNonNullable> = ObjectProxy<
+  TNonNullable,
+  TObject
+> &
+  ValueState<TObject> &
+  ObjectMutationMethods
 
 /** Type for useCompute function. */
 type StoreUseComputeFn<T extends FieldValues, P extends FieldPath<T>, R> = (

@@ -11,6 +11,7 @@ import type {
   ArrayProxy,
   DerivedStateProps,
   ObjectMutationMethods,
+  ObjectStateValue,
   Prettify,
   StoreRoot,
   ValueState
@@ -78,14 +79,14 @@ interface FormValueState<T>
   derived: <R>({ from, to }: DerivedStateProps<T, R>) => FormState<R>
 }
 
-type FormObjectProxy<T extends FieldValues> = {
+type FormObjectProxy<T extends FieldValues, TObject = T> = {
   /** Virtual state for the object's keys.
    *
    * This does NOT read from a real `keys` property on the stored object; it results in a stable array of keys.
    */
   readonly keys: FormReadOnlyState<FieldPath<T>[]>
 } & {
-  [K in keyof T]-?: FormState<T[K]>
+  [K in keyof T]-?: FormState<ObjectStateValue<TObject, T, K>>
 }
 
 type FormArrayState<TValue, TArray = TValue[]> =
@@ -93,10 +94,12 @@ type FormArrayState<TValue, TArray = TValue[]> =
     ? never
     : FormValueState<TArray> & ArrayProxy<TValue, FormState<TValue>>
 
-type FormObjectState<
-  TNonNullable extends FieldValues,
-  TObject = TNonNullable
-> = FormObjectProxy<TNonNullable> & FormValueState<TObject> & ObjectMutationMethods
+type FormObjectState<TNonNullable extends FieldValues, TObject = TNonNullable> = FormObjectProxy<
+  TNonNullable,
+  TObject
+> &
+  FormValueState<TObject> &
+  ObjectMutationMethods
 
 /** Type for nested objects with proxy methods */
 type DeepNonNullable<T> = [NonNullable<T>] extends [readonly (infer U)[]]
